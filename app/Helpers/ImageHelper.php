@@ -9,34 +9,54 @@ use Illuminate\Support\Str;
 class ImageHelper
 {
     /**
-     * Upload image and return stored path
+     * Upload image
      */
     public static function upload(
         UploadedFile $file,
         string $folder = 'uploads',
         string $disk = 'public'
     ): string {
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
 
-        $path = $file->storeAs($folder, $filename, $disk);
+        $extension = strtolower($file->getClientOriginalExtension());
 
-        return $path; // stored in DB
+        $filename = Str::uuid() . '.' . $extension;
+
+        return $file->storeAs($folder, $filename, $disk);
     }
 
     /**
-     * Delete image safely
+     * Delete image
      */
-    public static function delete(?string $path, string $disk = 'public'): void
-    {
-        if ($path && Storage::disk($disk)->exists($path)) {
-            Storage::disk($disk)->delete($path);
+    public static function delete(
+        ?string $path,
+        string $disk = 'public'
+    ): bool {
+
+        if (!$path) {
+            return false;
         }
+
+        if (Storage::disk($disk)->exists($path)) {
+            return Storage::disk($disk)->delete($path);
+        }
+
+        return false;
     }
- 
-    
-    public static function url(?string $path, string $disk = 'public'): ?string
-    {
-        if (!$path) return null;
+
+    /**
+     * Get public image URL
+     */
+    public static function url(
+        ?string $path,
+        string $disk = 'public'
+    ): ?string {
+
+        if (!$path) {
+            return null;
+        }
+
+        // remove accidental leading slash
+        $path = ltrim($path, '/');
 
         return Storage::disk($disk)->url($path);
     }
