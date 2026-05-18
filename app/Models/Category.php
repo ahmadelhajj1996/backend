@@ -1,12 +1,12 @@
 <?php
 namespace App\Models;
 
+use App\Helpers\ImageHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Helpers\ImageHelper;
 
 class Category extends Model
 {
@@ -69,8 +69,10 @@ class Category extends Model
         return $ancestors;
     }
 
-    public function getImageUrlAttribute()
+    public function getImageUrlAttribute(): ?string
     {
-        return ImageHelper::url($this->image);
+        return $this->image
+            ? ImageHelper::url($this->image)
+            : null;
     }
 }
