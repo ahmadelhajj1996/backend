@@ -17,7 +17,7 @@ class AttributeOptionController extends Controller
     {
         try {
 
-                        $query = AttributeOption::with(['attribute'])->query();
+                        $query = AttributeOption::with(['attribute']);
 
 
             // // Filter by attribute_id
