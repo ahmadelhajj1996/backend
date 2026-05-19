@@ -16,7 +16,8 @@ class AttributeOptionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = AttributeOption::query();
+
+            $query = AttributeOption::with(['attribute'])->query();
 
             // // Filter by attribute_id
             // if ($request->has('attribute_id')) {

@@ -26,7 +26,7 @@ return new class extends Migration
                 ->constrained()
                 ->onDelete('cascade');
 
-            // $table->json('selected_attributes')->nullable();
+            $table->json('selected_attributes')->nullable();
 
             $table->decimal('unit_price', 10, 2);
 

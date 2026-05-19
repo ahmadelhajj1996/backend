@@ -172,6 +172,7 @@ class VariationController extends Controller
                 'product',
                 'images',
                 'attributes.option.attribute',
+                'characteristics',
             ])->find($id);
 
             if (! $variation) {

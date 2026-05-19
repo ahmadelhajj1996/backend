@@ -15,7 +15,7 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Order::with( ['client' , 'items'] );
+            $query = Order::with(['client', 'items']);
 
             // Filters
             if ($request->has('status')) {
@@ -74,6 +74,7 @@ class OrderController extends Controller
             $order = DB::transaction(function () use ($validated) {
 
                 $order = Order::create([
+
                     'client_id'        => $validated['client_id'],
 
                     'subtotal'         => $validated['subtotal'],
@@ -94,21 +95,15 @@ class OrderController extends Controller
                 ]);
 
                 foreach ($validated['items'] as $item) {
-
                     $order->items()->create([
-
                         'product_id'          => $item['product_id'],
-
                         'variation_id'        => $item['variation_id'],
-
-                        'selected_attributes' =>
-                        $item['selected_attributes'] ?? [],
-
                         'unit_price'          => $item['unit_price'],
-
                         'quantity'            => $item['quantity'],
-
                         'subtotal'            => $item['subtotal'],
+
+                        // NOW SAFE (after migration)
+                        'selected_attributes' => $item['selected_attributes'] ?? [],
                     ]);
                 }
 
@@ -139,7 +134,7 @@ class OrderController extends Controller
     public function show($id)
     {
         try {
-            $order = Order::with( ['client' , 'items'] )->find($id);
+            $order = Order::with(['client', 'items'])->find($id);
 
             if (! $order) {
                 return $this->notFoundResponse('Order not found');
