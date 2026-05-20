@@ -161,9 +161,6 @@ class VariationController extends Controller
         }
     }
 
-    /**
-     * Display the specified variation.
-     */
     public function show($id)
     {
         try {

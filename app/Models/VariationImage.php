@@ -1,38 +1,36 @@
 <?php
+
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Helpers\ImageHelper;
-
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VariationImage extends Model
 {
     use HasFactory;
 
-    protected $table = 'variation_images';
-
     protected $fillable = [
         'variation_id',
         'path',
+        'sort_order',
     ];
 
-    protected $appends = ['path_url'];
-
+    protected $appends = [
+        'path_url',
+    ];
 
     protected $casts = [
-        'variation_id' => 'integer',
-        'created_at'   => 'datetime',
-        'updated_at'   => 'datetime',
+        'sort_order' => 'integer',
     ];
 
-    public function variation()
+    public function variation(): BelongsTo
     {
         return $this->belongsTo(Variation::class);
     }
 
-    public function getPathUrlAttribute()
+    public function getPathUrlAttribute(): ?string
     {
         return ImageHelper::url($this->path);
     }

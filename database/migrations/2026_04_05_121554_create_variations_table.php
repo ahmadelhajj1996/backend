@@ -10,24 +10,43 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-    {
-        Schema::create('variations', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
-            $table->string('sku')->unique();
-            $table->decimal('price', 10, 2);
-            $table->integer('quantity')->default(0);
-            $table->string('image')->nullable();
-            $table->boolean('is_default')->default(false);
-            $table->integer('sold_count')->default(0); // NEW
-            $table->timestamps();
-            
-            $table->index('product_id');
-            $table->index('sku');
-            $table->index('is_default');
-        });
-    }
+{
+    Schema::create('variations', function (Blueprint $table) {
+        $table->id();
 
+        $table->foreignId('product_id')
+            ->constrained()
+            ->cascadeOnDelete();
+
+        // Real SKU
+        $table->string('sku')->unique();
+
+        // Main price
+        $table->decimal('price', 10, 2);
+
+        // Inventory
+        $table->unsignedInteger('quantity')->default(0);
+
+        // Analytics
+        $table->unsignedInteger('sold_count')->default(0);
+
+        // UI helpers
+        $table->boolean('is_default')->default(false);
+
+        // Optional preview image
+        $table->string('image')->nullable();
+
+        // Status
+        $table->boolean('is_active')->default(true);
+
+        $table->timestamps();
+
+        $table->index('product_id');
+        $table->index('sku');
+        $table->index('is_default');
+        $table->index('is_active');
+    });
+}
     /**
      * Reverse the migrations.
      */

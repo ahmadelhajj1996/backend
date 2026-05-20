@@ -6,43 +6,38 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
+
     public function up(): void
-    {
-        Schema::create('variation_attributes', function (Blueprint $table) {
-            $table->id();
+{
+    Schema::create('variation_attributes', function (Blueprint $table) {
 
-            $table->foreignId('variation_id')
-                ->constrained()
-                ->cascadeOnDelete();
+        $table->id();
 
-            $table->foreignId('attribute_id')
-                ->constrained()
-                ->cascadeOnDelete();
+        $table->foreignId('variation_id')
+            ->constrained()
+            ->cascadeOnDelete();
 
-            $table->foreignId('attribute_option_id')
-                ->constrained()
-                ->cascadeOnDelete();
+        $table->foreignId('attribute_id')
+            ->constrained()
+            ->cascadeOnDelete();
 
-            $table->timestamps();
+        $table->foreignId('attribute_option_id')
+            ->constrained()
+            ->cascadeOnDelete();
 
-            $table->index('variation_id');
-            $table->index('attribute_id');
-            $table->index('attribute_option_id');
+        $table->timestamps();
 
-            $table->unique(
-                [
-                    'variation_id',
-                    'attribute_id',
-                    'attribute_option_id',
-                ],
-                'variation_attribute_unique'
-            );
+        $table->unique([
+            'variation_id',
+            'attribute_id'
+        ], 'variation_attribute_unique');
 
-        });
-    }
+        $table->index('variation_id');
+        $table->index('attribute_id');
+        $table->index('attribute_option_id');
+    });
+}
 
 
     public function down(): void

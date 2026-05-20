@@ -11,18 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-
         Schema::create('variation_images', function (Blueprint $table) {
+
             $table->id();
+
             $table->foreignId('variation_id')
                 ->constrained()
                 ->cascadeOnDelete();
+
             $table->text('path');
+
+            // Sorting
+            $table->unsignedInteger('sort_order')->default(0);
+
             $table->timestamps();
 
-            $table->index(['variation_id']);
+            $table->index('variation_id');
         });
-
     }
 
     /**

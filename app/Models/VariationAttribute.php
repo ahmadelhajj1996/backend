@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VariationAttribute extends Model
 {
     use HasFactory;
-
-    protected $table = 'variation_attributes';
 
     protected $fillable = [
         'variation_id',
@@ -18,17 +16,14 @@ class VariationAttribute extends Model
         'attribute_option_id',
     ];
 
-    protected $casts = [
-        'variation_id'        => 'integer',
-        'attribute_id'        => 'integer',
-        'attribute_option_id' => 'integer',
-        'created_at'          => 'datetime',
-        'updated_at'          => 'datetime',
+    protected $appends = [
+        'name',
+        'value',
     ];
 
     /*
     |--------------------------------------------------------------------------
-    | Relationships
+    | RELATIONS
     |--------------------------------------------------------------------------
     */
 
@@ -48,5 +43,21 @@ class VariationAttribute extends Model
             AttributeOption::class,
             'attribute_option_id'
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSORS
+    |--------------------------------------------------------------------------
+    */
+
+    public function getNameAttribute(): ?string
+    {
+        return $this->attribute?->name;
+    }
+
+    public function getValueAttribute(): ?string
+    {
+        return $this->option?->value;
     }
 }

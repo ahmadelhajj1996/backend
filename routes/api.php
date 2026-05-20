@@ -74,7 +74,10 @@ Route::prefix('products')->group(function () {
 
 Route::apiResource('attributes', AttributeController::class);
 
+
+
 Route::apiResource('attributes-options', AttributeOptionController::class);
+
 
 
 Route::apiResource('variations', VariationController::class);
