@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Attribute;
@@ -43,8 +42,8 @@ class AttributeOptionController extends Controller
 
                 $query->where(function ($q) use ($search) {
                     $q->where('value', 'like', "%{$search}%")
-                      ->orWhere('color_code', 'like', "%{$search}%")
-                      ->orWhere('size_code', 'like', "%{$search}%");
+                        ->orWhere('color_code', 'like', "%{$search}%")
+                        ->orWhere('size_code', 'like', "%{$search}%");
                 });
             }
 
@@ -68,7 +67,7 @@ class AttributeOptionController extends Controller
                 $query->orderBy('sort_order', 'asc');
             }
 
-            $perPage = $request->get('per_page', 15);
+            $perPage          = $request->get('per_page', 15);
             $attributeOptions = $query->paginate($perPage);
 
             return $this->successResponse(
@@ -90,7 +89,7 @@ class AttributeOptionController extends Controller
             $validated = $this->validateAttributeOption($request);
 
             $attribute = Attribute::find($validated['attribute_id']);
-            if (!$attribute) {
+            if (! $attribute) {
                 return $this->notFoundResponse('Attribute not found');
             }
 
@@ -122,7 +121,7 @@ class AttributeOptionController extends Controller
         try {
             $attributeOption = AttributeOption::with('attribute')->find($id);
 
-            if (!$attributeOption) {
+            if (! $attributeOption) {
                 return $this->notFoundResponse('Attribute option not found');
             }
 
@@ -144,7 +143,7 @@ class AttributeOptionController extends Controller
         try {
             $attributeOption = AttributeOption::find($id);
 
-            if (!$attributeOption) {
+            if (! $attributeOption) {
                 return $this->notFoundResponse('Attribute option not found');
             }
 
@@ -154,7 +153,7 @@ class AttributeOptionController extends Controller
                 $validated['attribute_id'] ?? $attributeOption->attribute_id
             );
 
-            if (!$attribute) {
+            if (! $attribute) {
                 return $this->notFoundResponse('Attribute not found');
             }
 
@@ -191,7 +190,7 @@ class AttributeOptionController extends Controller
         try {
             $attributeOption = AttributeOption::find($id);
 
-            if (!$attributeOption) {
+            if (! $attributeOption) {
                 return $this->notFoundResponse('Attribute option not found');
             }
 
@@ -218,15 +217,15 @@ class AttributeOptionController extends Controller
 
         return $request->validate([
             'attribute_id' => 'required|exists:attributes,id',
-            'value' => [
+            'value'        => [
                 'required',
                 'string',
                 'max:255',
                 $uniqueRule,
             ],
-            'color_code' => 'nullable|string|max:50|regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/',
-            'size_code' => 'nullable|string|max:10',
-            'sort_order' => 'nullable|integer|min:0',
+            'color_code'   => 'nullable|string|max:50|regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/',
+            'size_code'    => 'nullable|string|max:10',
+            'sort_order'   => 'nullable|integer|min:0',
         ]);
     }
 
@@ -235,32 +234,32 @@ class AttributeOptionController extends Controller
         $errors = [];
 
         $color = $validated['color_code'] ?? null;
-        $size = $validated['size_code'] ?? null;
+        $size  = $validated['size_code'] ?? null;
 
         if ($attribute->type === 'color') {
-            if (!$color && !$existingOption?->color_code) {
+            if (! $color && ! $existingOption?->color_code) {
                 $errors['color_code'] = ['Color code is required for color attributes'];
             }
         }
 
         if ($attribute->type === 'size') {
-            if (!$size && !$existingOption?->size_code) {
+            if (! $size && ! $existingOption?->size_code) {
                 $errors['size_code'] = ['Size code is required for size attributes'];
             }
 
             if ($size) {
-                $valid = ['XS','S','M','L','XL','XXL','XXXL','XS/S','S/M','M/L','L/XL'];
+                $valid = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XS/S', 'S/M', 'M/L', 'L/XL'];
 
-                if (!in_array(strtoupper($size), $valid)) {
+                if (! in_array(strtoupper($size), $valid)) {
                     $errors['size_code'] = ['Invalid size code format'];
                 }
             }
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw ValidationException::withMessages($errors);
         }
 
         return true;
     }
-}   
+}
