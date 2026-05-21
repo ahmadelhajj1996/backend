@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Helpers\ImageHelper;
@@ -32,9 +33,18 @@ class VariationController extends Controller
                 $query->where('product_id', $request->product_id);
             }
 
+            if ($request->has('is_active')) {
+                $query->where(
+                    'is_active',
+                    filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN)
+                );
+            }
+
             $perPage = $request->get('per_page', 15);
 
-            $variations = $query->paginate($perPage);
+            $variations = $query
+                ->latest()
+                ->paginate($perPage);
 
             return $this->successResponse(
                 $variations,
@@ -62,6 +72,7 @@ class VariationController extends Controller
             $product = Product::find($validated['product_id']);
 
             if (! $product) {
+
                 return $this->errorResponse(
                     'The selected product does not exist.',
                     422
@@ -73,7 +84,9 @@ class VariationController extends Controller
                 $request
             ) {
 
-                // unset old default
+                /**
+                 * Unset old default variation
+                 */
                 if (! empty($validated['is_default'])) {
 
                     Variation::where(
@@ -84,16 +97,36 @@ class VariationController extends Controller
                     ]);
                 }
 
-                // create variation
+                /**
+                 * Upload main preview image
+                 */
+                $mainImage = null;
+
+                if ($request->hasFile('image')) {
+
+                    $mainImage = ImageHelper::upload(
+                        $request->file('image'),
+                        'variations'
+                    );
+                }
+
+                /**
+                 * Create variation
+                 */
                 $variation = Variation::create([
                     'product_id' => $validated['product_id'],
                     'sku'        => $validated['sku'],
                     'price'      => $validated['price'],
                     'quantity'   => $validated['quantity'] ?? 0,
-                    'is_default' => $validated['is_default'] ?? false,
                     'sold_count' => $validated['sold_count'] ?? 0,
+                    'is_default' => $validated['is_default'] ?? false,
+                    'is_active'  => $validated['is_active'] ?? true,
+                    'image'      => $mainImage,
                 ]);
 
+                /**
+                 * Create attributes
+                 */
                 if (! empty($validated['attributes'])) {
 
                     foreach ($validated['attributes'] as $attribute) {
@@ -106,6 +139,9 @@ class VariationController extends Controller
                     }
                 }
 
+                /**
+                 * Create characteristics
+                 */
                 if (! empty($validated['characteristics'])) {
 
                     foreach ($validated['characteristics'] as $characteristic) {
@@ -117,6 +153,9 @@ class VariationController extends Controller
                     }
                 }
 
+                /**
+                 * Upload gallery images
+                 */
                 if ($request->hasFile('images')) {
 
                     foreach ($request->file('images') as $image) {
@@ -141,6 +180,7 @@ class VariationController extends Controller
                     'product',
                     'images',
                     'attributes.option.attribute',
+                    'characteristics',
                 ]),
                 'Variation created successfully'
             );
@@ -161,6 +201,9 @@ class VariationController extends Controller
         }
     }
 
+    /**
+     * Display the specified variation.
+     */
     public function show($id)
     {
         try {
@@ -203,6 +246,7 @@ class VariationController extends Controller
             $variation = Variation::with([
                 'images',
                 'attributes',
+                'characteristics',
             ])->find($id);
 
             if (! $variation) {
@@ -241,6 +285,36 @@ class VariationController extends Controller
                 }
 
                 /**
+                 * Update main preview image
+                 */
+                $mainImage = $variation->image;
+
+                if ($request->hasFile('image')) {
+
+                    if ($variation->image) {
+                        ImageHelper::delete($variation->image);
+                    }
+
+                    $mainImage = ImageHelper::upload(
+                        $request->file('image'),
+                        'variations'
+                    );
+                }
+
+                /**
+                 * Remove main image
+                 */
+                if (! empty($validated['remove_image'])) {
+
+                    if ($variation->image) {
+
+                        ImageHelper::delete($variation->image);
+                    }
+
+                    $mainImage = null;
+                }
+
+                /**
                  * Update variation
                  */
                 $variation->update([
@@ -248,15 +322,39 @@ class VariationController extends Controller
                     'sku'        => $validated['sku'],
                     'price'      => $validated['price'],
                     'quantity'   => $validated['quantity'] ?? 0,
-                    'is_default' => $validated['is_default'] ?? false,
                     'sold_count' => $validated['sold_count'] ?? 0,
+                    'is_default' => $validated['is_default'] ?? false,
+                    'is_active'  => $validated['is_active'] ?? true,
+                    'image'      => $mainImage,
                 ]);
 
                 /**
-                 * Replace variation attributes
+                 * Replace attributes completely
+                 *
+                 * IMPORTANT:
+                 * When attributes change, frontend should:
+                 * - reload variation images
+                 * - reload selected variation
+                 *
+                 * Because images belong to variation itself.
                  */
-
                 $variation->attributes()->delete();
+
+                if (! empty($validated['attributes'])) {
+
+                    foreach ($validated['attributes'] as $attribute) {
+
+                        VariationAttribute::create([
+                            'variation_id'        => $variation->id,
+                            'attribute_id'        => $attribute['attribute_id'],
+                            'attribute_option_id' => $attribute['attribute_option_id'],
+                        ]);
+                    }
+                }
+
+                /**
+                 * Replace characteristics
+                 */
                 $variation->characteristics()->delete();
 
                 if (! empty($validated['characteristics'])) {
@@ -269,18 +367,9 @@ class VariationController extends Controller
                         ]);
                     }
                 }
-                if (! empty($validated['attributes'])) {
-                    foreach ($validated['attributes'] as $attribute) {
-                        VariationAttribute::create([
-                            'variation_id'        => $variation->id,
-                            'attribute_id'        => $attribute['attribute_id'],
-                            'attribute_option_id' => $attribute['attribute_option_id'],
-                        ]);
-                    }
-                }
 
                 /**
-                 * Add new images
+                 * Add new gallery images
                  */
                 if ($request->hasFile('images')) {
 
@@ -299,7 +388,7 @@ class VariationController extends Controller
                 }
 
                 /**
-                 * Delete selected images
+                 * Delete selected gallery images
                  */
                 if (! empty($validated['deleted_images'])) {
 
@@ -326,6 +415,7 @@ class VariationController extends Controller
                     'product',
                     'images',
                     'attributes.option.attribute',
+                    'characteristics',
                 ]),
                 'Variation updated successfully'
             );
@@ -356,6 +446,7 @@ class VariationController extends Controller
             $variation = Variation::with([
                 'images',
                 'attributes',
+                'characteristics',
             ])->find($id);
 
             if (! $variation) {
@@ -368,7 +459,15 @@ class VariationController extends Controller
             DB::transaction(function () use ($variation) {
 
                 /**
-                 * Delete images from storage
+                 * Delete main image
+                 */
+                if ($variation->image) {
+
+                    ImageHelper::delete($variation->image);
+                }
+
+                /**
+                 * Delete gallery images
                  */
                 foreach ($variation->images as $image) {
 
@@ -381,6 +480,8 @@ class VariationController extends Controller
                 $variation->images()->delete();
 
                 $variation->attributes()->delete();
+
+                $variation->characteristics()->delete();
 
                 /**
                  * Delete variation
@@ -465,8 +566,10 @@ class VariationController extends Controller
             $variations = Variation::with([
                 'images',
                 'attributes.option.attribute',
+                'characteristics',
             ])
                 ->where('product_id', $productId)
+                ->where('is_active', true)
                 ->orderBy('is_default', 'desc')
                 ->orderBy('price', 'asc')
                 ->get();
@@ -499,62 +602,90 @@ class VariationController extends Controller
         );
 
         if ($ignoreId) {
+
             $uniqueSkuRule->ignore($ignoreId);
         }
 
         return $request->validate([
 
-            'product_id'                       => [
+            /**
+             * Basic fields
+             */
+            'product_id' => [
                 'required',
                 'exists:products,id',
             ],
 
-            'sku'                              => [
+            'sku' => [
                 'required',
                 'string',
                 'max:100',
                 $uniqueSkuRule,
             ],
 
-            'price'                            => [
+            'price' => [
                 'required',
                 'numeric',
                 'min:0',
             ],
 
-            'quantity'                         => [
+            'quantity' => [
                 'nullable',
                 'integer',
                 'min:0',
             ],
 
-            'is_default'                       => [
+            'sold_count' => [
+                'nullable',
+                'integer',
+                'min:0',
+            ],
+
+            'is_default' => [
                 'nullable',
                 'boolean',
             ],
 
-            'sold_count'                       => [
+            'is_active' => [
                 'nullable',
-                'integer',
-                'min:0',
+                'boolean',
             ],
 
             /**
-             * Images
+             * Main image
              */
-            'images'                           => [
+            'image' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
+
+            'remove_image' => [
+                'nullable',
+                'boolean',
+            ],
+
+            /**
+             * Gallery images
+             */
+            'images' => [
                 'nullable',
                 'array',
             ],
 
-            'images.*'                         => ['image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'images.*' => [
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+            ],
 
-            'deleted_images'                   => [
+            'deleted_images' => [
                 'nullable',
                 'array',
             ],
 
-            'deleted_images.*'                 => [
+            'deleted_images.*' => [
                 'integer',
                 'exists:variation_images,id',
             ],
@@ -562,12 +693,36 @@ class VariationController extends Controller
             /**
              * Attributes
              */
-            'attributes'                       => ['nullable', 'array'],
-            'attributes.*.attribute_id'        => ['required', 'integer'],
-            'attributes.*.attribute_option_id' => ['required', 'integer'],
+            'attributes' => [
+                'nullable',
+                'array',
+            ],
 
-            'characteristics'                  => ['nullable', 'array'],
-            'characteristics.*.attribute'      => ['required', 'string'],
+            'attributes.*.attribute_id' => [
+                'required',
+                'integer',
+                'exists:attributes,id',
+            ],
+
+            'attributes.*.attribute_option_id' => [
+                'required',
+                'integer',
+                'exists:attribute_options,id',
+            ],
+
+            /**
+             * Characteristics
+             */
+            'characteristics' => [
+                'nullable',
+                'array',
+            ],
+
+            'characteristics.*.attribute' => [
+                'required',
+                'string',
+                'max:255',
+            ],
 
         ]);
     }

@@ -12,13 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('attribute_options', function (Blueprint $table) {
-           $table->id();
-            $table->foreignId('attribute_id')->constrained()->onDelete('cascade');
+            $table->id();
+
+            $table->foreignId('attribute_id')
+                ->constrained()
+                ->cascadeOnDelete();
+
             $table->string('value');
-            $table->string('color_code')->nullable(); 
-            $table->string('sort_order')->default('asc');
+
+            $table->string('color_code')->nullable();
+
+            $table->unsignedInteger('sort_order')->default(0);
+
+            $table->decimal('price_modifier', 10, 2)->default(0);
+
             $table->timestamps();
-            
+
             $table->index('attribute_id');
             $table->unique(['attribute_id', 'value']);
         });
@@ -29,6 +38,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('options');
+        Schema::dropIfExists('attribute_options');
     }
 };

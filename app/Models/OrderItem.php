@@ -19,8 +19,11 @@ class OrderItem extends Model
 
     protected $casts = [
         'selected_attributes' => 'array',
+
+        // money must stay decimal
         'unit_price' => 'decimal:2',
-        'subtotal' => 'integer',
+        'subtotal' => 'decimal:2',
+
         'quantity' => 'integer',
     ];
 

@@ -25,13 +25,14 @@ return new class extends Migration
         $table->foreignId('attribute_option_id')
             ->constrained()
             ->cascadeOnDelete();
-
+ 
+            
         $table->timestamps();
 
-        $table->unique([
-            'variation_id',
-            'attribute_id'
-        ], 'variation_attribute_unique');
+        // $table->unique([
+        //     'variation_id',
+        //     'attribute_id'
+        // ], 'variation_attribute_unique');
 
         $table->index('variation_id');
         $table->index('attribute_id');

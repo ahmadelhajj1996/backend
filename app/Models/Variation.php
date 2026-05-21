@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Characteristic;
 
 class Variation extends Model
 {
@@ -34,13 +35,8 @@ class Variation extends Model
     protected $appends = [
         'image_url',
         'is_in_stock',
+        'final_price', // 🔥 NEW
     ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONS
-    |--------------------------------------------------------------------------
-    */
 
     public function product(): BelongsTo
     {
@@ -49,27 +45,22 @@ class Variation extends Model
 
     public function attributes(): HasMany
     {
-        return $this->hasMany(VariationAttribute::class)
-            ->with([
-                'attribute',
-                'option',
-            ]);
+        return $this->hasMany(VariationAttribute::class)->with(['attribute', 'option']);
     }
 
     public function images(): HasMany
     {
-        return $this->hasMany(VariationImage::class)
-            ->orderBy('sort_order');
-    }
-
-    public function characteristics(): HasMany
-    {
-        return $this->hasMany(Characteristic::class);
+        return $this->hasMany(VariationImage::class)->orderBy('sort_order');
     }
 
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function characteristics(): HasMany
+    {
+        return $this->hasMany(Characteristic::class);
     }
 
     /*
@@ -88,8 +79,12 @@ class Variation extends Model
         return $this->quantity > 0;
     }
 
-    public function getFormattedPriceAttribute(): string
-    {
-        return number_format($this->price, 2);
-    }
+public function getFinalPriceAttribute(): float
+{
+    $modifier = $this->attributes()
+        ->get()
+        ->sum(fn ($attr) => $attr->option?->price_modifier ?? 0);
+
+    return (float) $this->price + $modifier;
+}
 }

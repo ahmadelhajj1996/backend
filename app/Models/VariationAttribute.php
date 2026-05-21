@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+
 class VariationAttribute extends Model
 {
     use HasFactory;
@@ -19,13 +20,8 @@ class VariationAttribute extends Model
     protected $appends = [
         'name',
         'value',
+        'price_modifier',
     ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | RELATIONS
-    |--------------------------------------------------------------------------
-    */
 
     public function variation(): BelongsTo
     {
@@ -39,17 +35,8 @@ class VariationAttribute extends Model
 
     public function option(): BelongsTo
     {
-        return $this->belongsTo(
-            AttributeOption::class,
-            'attribute_option_id'
-        );
+        return $this->belongsTo(AttributeOption::class, 'attribute_option_id');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSORS
-    |--------------------------------------------------------------------------
-    */
 
     public function getNameAttribute(): ?string
     {
@@ -59,5 +46,10 @@ class VariationAttribute extends Model
     public function getValueAttribute(): ?string
     {
         return $this->option?->value;
+    }
+
+    public function getPriceModifierAttribute(): float
+    {
+        return (float) ($this->option?->price_modifier ?? 0);
     }
 }

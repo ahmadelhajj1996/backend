@@ -15,7 +15,12 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Order::with(['client', 'items']);
+
+            $query = Order::with([
+                'client',
+                'items.product',
+                'items.variation.images',
+            ]);
 
             // Filters
             if ($request->has('status')) {
@@ -95,15 +100,16 @@ class OrderController extends Controller
                 ]);
 
                 foreach ($validated['items'] as $item) {
+
                     $order->items()->create([
                         'product_id'          => $item['product_id'],
                         'variation_id'        => $item['variation_id'],
+
                         'unit_price'          => $item['unit_price'],
                         'quantity'            => $item['quantity'],
                         'subtotal'            => $item['subtotal'],
-
-                        // NOW SAFE (after migration)
                         'selected_attributes' => $item['selected_attributes'] ?? [],
+
                     ]);
                 }
 
@@ -134,21 +140,30 @@ class OrderController extends Controller
     public function show($id)
     {
         try {
-            $order = Order::with(['client', 'items'])->find($id);
+
+            $order = Order::with([
+                'client',
+                'items.product',
+                'items.variation.images',
+            ])->find($id); // ✅ THIS IS MISSING
 
             if (! $order) {
                 return $this->notFoundResponse('Order not found');
             }
 
             return $this->successResponse($order, 'Order retrieved successfully');
+
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve order: ' . $e->getMessage(), 500);
+
+            return $this->errorResponse(
+                'Failed to retrieve order: ' . $e->getMessage(),
+                500
+            );
         }
     }
 
-    /**
-     * Update order
-     */
+    
+ 
     public function update(Request $request, $id)
     {
         try {
@@ -223,43 +238,33 @@ class OrderController extends Controller
     private function validateOrder(Request $request)
     {
         return $request->validate([
-            'client_id'                   => 'required|exists:clients,id',
+            'client_id'                           => 'required|exists:clients,id',
 
-            'subtotal'                    => 'required|numeric|min:0',
+            'subtotal'                            => 'required|numeric|min:0',
+            'grand_total'                         => 'required|numeric|min:0',
+            'item_count'                          => 'required|integer|min:1',
 
-            'grand_total'                 => 'required|numeric|min:0',
+            'payment_method'                      => ['sometimes', Rule::in(['cash', 'card', 'paypal'])],
+            'payment_status'                      => ['sometimes', Rule::in(['pending', 'paid', 'failed'])],
 
-            'item_count'                  => 'required|integer|min:1',
+            'shipping_address'                    => 'required|string',
+            'billing_address'                     => 'nullable|string',
+            'notes'                               => 'nullable|string',
 
-            'payment_method'              => [
-                'sometimes',
-                Rule::in(['cash', 'card', 'paypal']),
-            ],
+            'items'                               => 'required|array|min:1',
 
-            'payment_status'              => [
-                'sometimes',
-                Rule::in(['pending', 'paid', 'failed']),
-            ],
+            // ✅ FIX HERE (FLAT STRUCTURE)
+            'items.*.product_id'                  => 'required|exists:products,id',
+            'items.*.variation_id'                => 'required|exists:variations,id',
 
-            'shipping_address'            => 'required|string',
+            'items.*.quantity'                    => 'required|integer|min:1',
+            'items.*.unit_price'                  => 'required|numeric|min:0',
+            'items.*.subtotal'                    => 'required|numeric|min:0',
 
-            'billing_address'             => 'nullable|string',
+            'items.*.selected_attributes'         => 'nullable|array',
+            'items.*.selected_attributes.*.name'  => 'required|string',
+            'items.*.selected_attributes.*.value' => 'required|string',
 
-            'notes'                       => 'nullable|string',
-
-            'items'                       => 'required|array|min:1',
-
-            'items.*.product_id'          => 'required|exists:products,id',
-
-            'items.*.variation_id'        => 'required|exists:variations,id',
-
-            'items.*.quantity'            => 'required|integer|min:1',
-
-            'items.*.unit_price'          => 'required|numeric|min:0',
-
-            'items.*.subtotal'            => 'required|numeric|min:0',
-
-            'items.*.selected_attributes' => 'nullable|array',
         ]);
     }
 

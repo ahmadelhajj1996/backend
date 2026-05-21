@@ -40,6 +40,7 @@ class Product extends Model
         return $this->hasMany(Variation::class);
     }
 
+
     public function scopePublished($query)
     {
         return $query->where('status', 'published')->where('is_active', true);
