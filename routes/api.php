@@ -14,6 +14,7 @@ use App\Http\Controllers\VariationImageController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\CharacteristicController;
+use App\Http\Controllers\SearchController;
 
 
 
@@ -95,3 +96,5 @@ Route::post(
 );
 
 
+
+Route::get("/search", [SearchController::class, "index"]);
