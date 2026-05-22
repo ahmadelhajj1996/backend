@@ -39,7 +39,13 @@ class Order extends Model
         parent::boot();
 
         static::creating(function ($order) {
-            $order->order_number = 'ORD-' . strtoupper(uniqid());
+            $order->order_number = 'ORD-' . str_pad(
+                random_int(0, 9999),
+                4,
+                '0',
+                STR_PAD_LEFT
+            );
         });
     }
+
 }
