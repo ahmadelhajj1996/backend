@@ -3,18 +3,18 @@
 return [
 
     'defaults'         => [
-        'guard'     => 'api',
-        'passwords' => 'users',
+        'guard'     => 'web',
+        'passwords' => 'admins',
     ],
 
     'guards'           => [
         'web'    => [
             'driver'   => 'session',
-            'provider' => 'users',
+            'provider' => 'admins',
         ],
         'api'    => [
             'driver'   => 'jwt',
-            'provider' => 'users',
+            'provider' => 'admins',
         ],
         'admin'  => [
             'driver'   => 'jwt',
@@ -26,10 +26,6 @@ return [
         ]],
 
     'providers'        => [
-        'users'   => [
-            'driver' => 'eloquent',
-            'model'  => env('AUTH_MODEL', App\Models\User::class),
-        ],
 
         'admins'  => [
             'driver' => 'eloquent',
@@ -62,8 +58,15 @@ return [
     */
 
     'passwords'        => [
-        'users' => [
-            'provider' => 'users',
+        'admins'  => [
+            'provider' => 'admins',
+            'table'    => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire'   => 60,
+            'throttle' => 60,
+        ],
+
+        'clients' => [
+            'provider' => 'clients',
             'table'    => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire'   => 60,
             'throttle' => 60,

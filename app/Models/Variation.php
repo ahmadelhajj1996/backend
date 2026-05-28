@@ -1,13 +1,13 @@
 <?php
-
 namespace App\Models;
 
 use App\Helpers\ImageHelper;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Characteristic;
+use App\Services\CurrencyService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Characteristic;
 
 class Variation extends Model
 {
@@ -25,17 +25,20 @@ class Variation extends Model
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'quantity' => 'integer',
+        'price'      => 'decimal:2',
+        'quantity'   => 'integer',
         'sold_count' => 'integer',
         'is_default' => 'boolean',
-        'is_active' => 'boolean',
+        'is_active'  => 'boolean',
     ];
 
     protected $appends = [
         'image_url',
         'is_in_stock',
-        'final_price', // 🔥 NEW
+        'final_price',
+        'usd_price',
+        'new_price',
+ 
     ];
 
     public function product(): BelongsTo
@@ -63,12 +66,6 @@ class Variation extends Model
         return $this->hasMany(Characteristic::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSORS
-    |--------------------------------------------------------------------------
-    */
-
     public function getImageUrlAttribute(): ?string
     {
         return ImageHelper::url($this->image);
@@ -79,12 +76,34 @@ class Variation extends Model
         return $this->quantity > 0;
     }
 
-public function getFinalPriceAttribute(): float
-{
-    $modifier = $this->attributes()
-        ->get()
-        ->sum(fn ($attr) => $attr->option?->price_modifier ?? 0);
+    public function getFinalPriceAttribute(): float
+    {
+        $modifier = $this->attributes()
+            ->get()
+            ->sum(fn($attr) => $attr->option?->price_modifier ?? 0);
 
-    return (float) $this->price + $modifier;
+        return (float) $this->price + $modifier;
+    }
+
+    public function getUsdPriceAttribute(): ?float
+    {
+        $value = CurrencyService::sypToUsd(
+            $this->final_price
+        );
+
+        return $value !== null
+            ? round($value, 2)
+            : null;
+    }
+    public function getNewPriceAttribute(): ?float
+    {
+        return round(
+            $this->final_price / 100,
+            2
+        );
+    }
+
 }
-}
+
+
+// update variation price  , get current dollar exchange
