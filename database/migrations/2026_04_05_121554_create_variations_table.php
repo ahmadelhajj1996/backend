@@ -7,48 +7,118 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Run migrations
      */
     public function up(): void
-{
-    Schema::create('variations', function (Blueprint $table) {
-        $table->id();
+    {
+        Schema::create('variations', function (Blueprint $table) {
 
-        $table->foreignId('product_id')
-            ->constrained()
-            ->cascadeOnDelete();
+            $table->id();
 
-        // Real SKU
-        $table->string('sku')->unique();
+            /*
+            |--------------------------------------------------------------------------
+            | Relationships
+            |--------------------------------------------------------------------------
+            */
 
-        // Main price
-        $table->decimal('price', 10, 2);
+            $table->foreignId('product_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-        // Inventory
-        $table->unsignedInteger('quantity')->default(0);
+            /*
+            |--------------------------------------------------------------------------
+            | Identification
+            |--------------------------------------------------------------------------
+            */
 
-        // Analytics
-        $table->unsignedInteger('sold_count')->default(0);
+            $table->string('sku')
+                ->unique();
 
-        // UI helpers
-        $table->boolean('is_default')->default(false);
+            /*
+            |--------------------------------------------------------------------------
+            | Selling Prices
+            |--------------------------------------------------------------------------
+            */
 
-        // Optional preview image
-        $table->string('image')->nullable();
+            // Local sell price (SYP)
+            $table->decimal('sell_price', 15, 2)
+                ->default(0);
 
-        // Status
-        $table->boolean('is_active')->default(true);
+            // USD sell price
+            $table->decimal('base_price', 15, 2)
+                ->nullable();
 
-        $table->timestamps();
+            // Exchange rate used for sell price
+            $table->decimal('sell_rate', 15, 4)
+                ->nullable();
 
-        $table->index('product_id');
-        $table->index('sku');
-        $table->index('is_default');
-        $table->index('is_active');
-    });
-}
+            /*
+            |--------------------------------------------------------------------------
+            | Supplier / Cost Prices
+            |--------------------------------------------------------------------------
+            */
+
+            // Local supplier cost (SYP)
+            $table->decimal('buy_price', 15, 2)
+                ->default(0);
+
+            // USD supplier cost
+            $table->decimal('base_buy_price', 15, 2)
+                ->nullable();
+
+            // Exchange rate used for supplier cost
+            $table->decimal('buy_rate', 15, 4)
+                ->nullable();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
+
+            $table->unsignedInteger('quantity')
+                ->default(0);
+
+            $table->unsignedInteger('sold_count')
+                ->default(0);
+
+            $table->decimal('cached_final_price', 10, 2)
+                ->nullable();
+
+            $table->decimal('cached_profit', 10, 2)
+                ->nullable();
+
+            $table->decimal('cached_profit_percentage', 10, 2)
+                ->nullable();
+
+
+
+            $table->boolean('is_default')
+                ->default(false);
+
+            $table->boolean('is_active')
+                ->default(true);
+
+            $table->string('image')
+                ->nullable();
+
+            $table->timestamps();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Indexes
+            |--------------------------------------------------------------------------
+            */
+
+            $table->index('product_id');
+            $table->index('sku');
+            $table->index('is_default');
+            $table->index('is_active');
+        });
+    }
+
     /**
-     * Reverse the migrations.
+     * Reverse migrations
      */
     public function down(): void
     {

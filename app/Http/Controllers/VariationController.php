@@ -1,32 +1,31 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Helpers\ImageHelper;
+use App\Jobs\RecalculateVariationPriceJob;
 use App\Models\Characteristic;
 use App\Models\Product;
 use App\Models\Variation;
 use App\Models\VariationAttribute;
 use App\Models\VariationImage;
+use App\Services\VariationRateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class VariationController extends Controller
 {
-    /**
-     * Display a listing of variations.
-     */
     public function index(Request $request)
     {
         try {
 
             $query = Variation::with([
-                'product',
-                'images',
-                'attributes.option.attribute',
-                'characteristics',
+                'product:id,name',
+                'images:id,variation_id,path',
+                'attributes:id,variation_id,attribute_option_id',
+                'attributes.option:id,attribute_id,value,color_code',
+                'attributes.option.attribute:id,name',
+                'characteristics:id,variation_id,attribute',
             ]);
 
             if ($request->has('product_id')) {
@@ -40,170 +39,16 @@ class VariationController extends Controller
                 );
             }
 
-            $perPage = $request->get('per_page', 15);
-
-            $variations = $query
-                ->latest()
-                ->paginate($perPage);
-
             return $this->successResponse(
-                $variations,
+                $query->latest()->paginate($request->get('per_page', 15)),
                 'Variations retrieved successfully'
             );
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve variations: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Store a newly created variation.
-     */
-    public function store(Request $request)
-    {
-        try {
-
-            $validated = $this->validateVariation($request);
-
-            $product = Product::find($validated['product_id']);
-
-            if (! $product) {
-
-                return $this->errorResponse(
-                    'The selected product does not exist.',
-                    422
-                );
-            }
-
-            $variation = DB::transaction(function () use (
-                $validated,
-                $request
-            ) {
-
-                /**
-                 * Unset old default variation
-                 */
-                if (! empty($validated['is_default'])) {
-
-                    Variation::where(
-                        'product_id',
-                        $validated['product_id']
-                    )->update([
-                        'is_default' => false,
-                    ]);
-                }
-
-                /**
-                 * Upload main preview image
-                 */
-                $mainImage = null;
-
-                if ($request->hasFile('image')) {
-
-                    $mainImage = ImageHelper::upload(
-                        $request->file('image'),
-                        'variations'
-                    );
-                }
-
-                /**
-                 * Create variation
-                 */
-                $variation = Variation::create([
-                    'product_id' => $validated['product_id'],
-                    'sku'        => $validated['sku'],
-                    'price'      => $validated['price'],
-                    'quantity'   => $validated['quantity'] ?? 0,
-                    'sold_count' => $validated['sold_count'] ?? 0,
-                    'is_default' => $validated['is_default'] ?? false,
-                    'is_active'  => $validated['is_active'] ?? true,
-                    'image'      => $mainImage,
-                ]);
-
-                /**
-                 * Create attributes
-                 */
-                if (! empty($validated['attributes'])) {
-
-                    foreach ($validated['attributes'] as $attribute) {
-
-                        VariationAttribute::create([
-                            'variation_id'        => $variation->id,
-                            'attribute_id'        => $attribute['attribute_id'],
-                            'attribute_option_id' => $attribute['attribute_option_id'],
-                        ]);
-                    }
-                }
-
-                /**
-                 * Create characteristics
-                 */
-                if (! empty($validated['characteristics'])) {
-
-                    foreach ($validated['characteristics'] as $characteristic) {
-
-                        Characteristic::create([
-                            'variation_id' => $variation->id,
-                            'attribute'    => $characteristic['attribute'],
-                        ]);
-                    }
-                }
-
-                /**
-                 * Upload gallery images
-                 */
-                if ($request->hasFile('images')) {
-
-                    foreach ($request->file('images') as $image) {
-
-                        $path = ImageHelper::upload(
-                            $image,
-                            'variations'
-                        );
-
-                        VariationImage::create([
-                            'variation_id' => $variation->id,
-                            'path'         => $path,
-                        ]);
-                    }
-                }
-
-                return $variation;
-            });
-
-            return $this->createdResponse(
-                $variation->load([
-                    'product',
-                    'images',
-                    'attributes.option.attribute',
-                    'characteristics',
-                ]),
-                'Variation created successfully'
-            );
-
-        } catch (ValidationException $e) {
-
-            return $this->validationErrorResponse(
-                $e->errors(),
-                'Validation failed'
-            );
-
-        } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to create variation: ' . $e->getMessage(),
-                500
-            );
-        }
-    }
-
-    /**
-     * Display the specified variation.
-     */
     public function show($id)
     {
         try {
@@ -216,229 +61,16 @@ class VariationController extends Controller
             ])->find($id);
 
             if (! $variation) {
-
-                return $this->notFoundResponse(
-                    'Variation not found'
-                );
+                return $this->notFoundResponse('Variation not found');
             }
 
-            return $this->successResponse(
-                $variation,
-                'Variation retrieved successfully'
-            );
+            return $this->successResponse($variation);
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve variation: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Update the specified variation.
-     */
-    public function update(Request $request, $id)
-    {
-        try {
-
-            $variation = Variation::with([
-                'images',
-                'attributes',
-                'characteristics',
-            ])->find($id);
-
-            if (! $variation) {
-
-                return $this->notFoundResponse(
-                    'Variation not found'
-                );
-            }
-
-            $validated = $this->validateVariation(
-                $request,
-                $variation->id
-            );
-
-            $updatedVariation = DB::transaction(function () use (
-                $variation,
-                $validated,
-                $request
-            ) {
-
-                $productId = $validated['product_id'] ?? $variation->product_id;
-
-                /**
-                 * Handle default variation
-                 */
-                if (! empty($validated['is_default'])) {
-
-                    Variation::where(
-                        'product_id',
-                        $productId
-                    )
-                        ->where('id', '!=', $variation->id)
-                        ->update([
-                            'is_default' => false,
-                        ]);
-                }
-
-                /**
-                 * Update main preview image
-                 */
-                $mainImage = $variation->image;
-
-                if ($request->hasFile('image')) {
-
-                    if ($variation->image) {
-                        ImageHelper::delete($variation->image);
-                    }
-
-                    $mainImage = ImageHelper::upload(
-                        $request->file('image'),
-                        'variations'
-                    );
-                }
-
-                /**
-                 * Remove main image
-                 */
-                if (! empty($validated['remove_image'])) {
-
-                    if ($variation->image) {
-
-                        ImageHelper::delete($variation->image);
-                    }
-
-                    $mainImage = null;
-                }
-
-                /**
-                 * Update variation
-                 */
-                $variation->update([
-                    'product_id' => $validated['product_id'],
-                    'sku'        => $validated['sku'],
-                    'price'      => $validated['price'],
-                    'quantity'   => $validated['quantity'] ?? 0,
-                    'sold_count' => $validated['sold_count'] ?? 0,
-                    'is_default' => $validated['is_default'] ?? false,
-                    'is_active'  => $validated['is_active'] ?? true,
-                    'image'      => $mainImage,
-                ]);
-
-                /**
-                 * Replace attributes completely
-                 *
-                 * IMPORTANT:
-                 * When attributes change, frontend should:
-                 * - reload variation images
-                 * - reload selected variation
-                 *
-                 * Because images belong to variation itself.
-                 */
-                $variation->attributes()->delete();
-
-                if (! empty($validated['attributes'])) {
-
-                    foreach ($validated['attributes'] as $attribute) {
-
-                        VariationAttribute::create([
-                            'variation_id'        => $variation->id,
-                            'attribute_id'        => $attribute['attribute_id'],
-                            'attribute_option_id' => $attribute['attribute_option_id'],
-                        ]);
-                    }
-                }
-
-                /**
-                 * Replace characteristics
-                 */
-                $variation->characteristics()->delete();
-
-                if (! empty($validated['characteristics'])) {
-
-                    foreach ($validated['characteristics'] as $characteristic) {
-
-                        Characteristic::create([
-                            'variation_id' => $variation->id,
-                            'attribute'    => $characteristic['attribute'],
-                        ]);
-                    }
-                }
-
-                /**
-                 * Add new gallery images
-                 */
-                if ($request->hasFile('images')) {
-
-                    foreach ($request->file('images') as $image) {
-
-                        $path = ImageHelper::upload(
-                            $image,
-                            'variations'
-                        );
-
-                        VariationImage::create([
-                            'variation_id' => $variation->id,
-                            'path'         => $path,
-                        ]);
-                    }
-                }
-
-                /**
-                 * Delete selected gallery images
-                 */
-                if (! empty($validated['deleted_images'])) {
-
-                    $images = VariationImage::whereIn(
-                        'id',
-                        $validated['deleted_images']
-                    )
-                        ->where('variation_id', $variation->id)
-                        ->get();
-
-                    foreach ($images as $image) {
-
-                        ImageHelper::delete($image->path);
-
-                        $image->delete();
-                    }
-                }
-
-                return $variation->fresh();
-            });
-
-            return $this->updatedResponse(
-                $updatedVariation->load([
-                    'product',
-                    'images',
-                    'attributes.option.attribute',
-                    'characteristics',
-                ]),
-                'Variation updated successfully'
-            );
-
-        } catch (ValidationException $e) {
-
-            return $this->validationErrorResponse(
-                $e->errors(),
-                'Validation failed'
-            );
-
-        } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to update variation: ' . $e->getMessage(),
-                500
-            );
-        }
-    }
-
-    /**
-     * Remove the specified variation.
-     */
     public function destroy($id)
     {
         try {
@@ -450,106 +82,28 @@ class VariationController extends Controller
             ])->find($id);
 
             if (! $variation) {
-
-                return $this->notFoundResponse(
-                    'Variation not found'
-                );
+                return $this->notFoundResponse('Variation not found');
             }
 
             DB::transaction(function () use ($variation) {
 
-                /**
-                 * Delete main image
-                 */
-                if ($variation->image) {
-
-                    ImageHelper::delete($variation->image);
-                }
-
-                /**
-                 * Delete gallery images
-                 */
                 foreach ($variation->images as $image) {
-
                     ImageHelper::delete($image->path);
                 }
 
-                /**
-                 * Delete relations
-                 */
                 $variation->images()->delete();
-
                 $variation->attributes()->delete();
-
                 $variation->characteristics()->delete();
-
-                /**
-                 * Delete variation
-                 */
                 $variation->delete();
             });
 
-            return $this->deletedResponse(
-                'Variation deleted successfully'
-            );
+            return $this->deletedResponse('Variation deleted successfully');
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to delete variation: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Bulk update stock quantities.
-     */
-    public function bulkUpdateStock(Request $request)
-    {
-        try {
-
-            $validated = $request->validate([
-                'variations'            => 'required|array',
-                'variations.*.id'       => 'required|exists:variations,id',
-                'variations.*.quantity' => 'required|integer|min:0',
-            ]);
-
-            DB::transaction(function () use ($validated) {
-
-                foreach ($validated['variations'] as $item) {
-
-                    Variation::where('id', $item['id'])
-                        ->update([
-                            'quantity' => $item['quantity'],
-                        ]);
-                }
-            });
-
-            return $this->successResponse(
-                null,
-                'Stock quantities updated successfully'
-            );
-
-        } catch (ValidationException $e) {
-
-            return $this->validationErrorResponse(
-                $e->errors(),
-                'Validation failed'
-            );
-
-        } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to update stock: ' . $e->getMessage(),
-                500
-            );
-        }
-    }
-
-    /**
-     * Get variations by product.
-     */
     public function getByProduct($productId)
     {
         try {
@@ -557,10 +111,7 @@ class VariationController extends Controller
             $product = Product::find($productId);
 
             if (! $product) {
-
-                return $this->notFoundResponse(
-                    'Product not found'
-                );
+                return $this->notFoundResponse('Product not found');
             }
 
             $variations = Variation::with([
@@ -571,159 +122,229 @@ class VariationController extends Controller
                 ->where('product_id', $productId)
                 ->where('is_active', true)
                 ->orderBy('is_default', 'desc')
-                ->orderBy('price', 'asc')
+                ->orderBy('sell_price', 'asc')
                 ->get();
 
-            return $this->successResponse(
-                $variations,
-                'Product variations retrieved successfully'
-            );
+            return $this->successResponse($variations);
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve product variations: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Validate variation data.
-     */
-    private function validateVariation(
-        Request $request,
-        $ignoreId = null
-    ) {
+    /*
+    |--------------------------------------------------------------------------
+    | STORE
+    |--------------------------------------------------------------------------
+    */
+    public function store(Request $request)
+    {
+        try {
 
-        $uniqueSkuRule = Rule::unique(
-            'variations',
-            'sku'
-        );
+            $validated = $this->validateVariation($request);
+
+            $variation = DB::transaction(function () use ($validated, $request) {
+
+                $mainImage = $request->hasFile('image')
+                    ? ImageHelper::upload($request->file('image'), 'variations')
+                    : null;
+
+                $rates = VariationRateService::snapshot();
+
+                $variation = Variation::create([
+                    'product_id'     => $validated['product_id'],
+                    'sku'            => $validated['sku'],
+
+                    'base_price'     => $validated['base_price'],
+                    'base_buy_price' => $validated['base_buy_price'] ?? 0,
+
+                    'sell_rate'      => $rates['sell_rate'],
+                    'buy_rate'       => $rates['buy_rate'],
+
+                    'sell_price'     => round($validated['base_price'] * $rates['sell_rate'], 2),
+                    'buy_price'      => round(($validated['base_buy_price'] ?? 0) * $rates['buy_rate'], 2),
+
+                    'quantity'       => $validated['quantity'] ?? 0,
+                    'sold_count'     => $validated['sold_count'] ?? 0,
+
+                    'is_default'     => $validated['is_default'] ?? false,
+                    'is_active'      => $validated['is_active'] ?? true,
+                    'image'          => $mainImage,
+                ]);
+
+                foreach ($validated['attributes'] ?? [] as $attribute) {
+
+                    if (
+                        empty($attribute['attribute_id']) ||
+                        empty($attribute['attribute_option_id'])
+                    ) {
+                        continue;
+                    }
+
+                    VariationAttribute::create([
+                        'variation_id'        => $variation->id,
+                        'attribute_id'        => $attribute['attribute_id'],
+                        'attribute_option_id' => $attribute['attribute_option_id'],
+                        'price_override'      => $attribute['price_override'] ?? null,
+                        'is_price_override'   => ! empty($attribute['price_override']),
+                    ]);
+                }
+
+                foreach ($validated['characteristics'] ?? [] as $characteristic) {
+                    Characteristic::create([
+                        'variation_id' => $variation->id,
+                        'attribute'    => $characteristic['attribute'],
+                    ]);
+                }
+
+                foreach ($request->file('images', []) as $image) {
+                    VariationImage::create([
+                        'variation_id' => $variation->id,
+                        'path'         => ImageHelper::upload($image, 'variations'),
+                    ]);
+                }
+
+                return $variation;
+            });
+
+            RecalculateVariationPriceJob::dispatch($variation->id);
+
+            return $this->createdResponse(
+                $variation->load([
+                    'product',
+                    'images',
+                    'attributes.option.attribute',
+                    'characteristics',
+                ])
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE
+    |--------------------------------------------------------------------------
+    */
+    public function update(Request $request, $id)
+    {
+        try {
+
+            $variation = Variation::findOrFail($id);
+            $validated = $this->validateVariation($request, $variation->id);
+
+            $updated = DB::transaction(function () use ($variation, $validated, $request) {
+
+                $rates = VariationRateService::snapshot();
+
+                $variation->update([
+                    'product_id'     => $validated['product_id'],
+                    'sku'            => $validated['sku'],
+
+                    'base_price'     => $validated['base_price'],
+                    'base_buy_price' => $validated['base_buy_price'] ?? 0,
+
+                    'sell_rate'      => $rates['sell_rate'],
+                    'buy_rate'       => $rates['buy_rate'],
+
+                    'sell_price'     => round($validated['base_price'] * $rates['sell_rate'], 2),
+                    'buy_price'      => round(($validated['base_buy_price'] ?? 0) * $rates['buy_rate'], 2),
+
+                    'quantity'       => $validated['quantity'] ?? 0,
+                    'sold_count'     => $validated['sold_count'] ?? 0,
+                    'is_default'     => $validated['is_default'] ?? false,
+                    'is_active'      => $validated['is_active'] ?? true,
+                ]);
+
+                $variation->attributes()->delete();
+
+                foreach ($validated['attributes'] ?? [] as $attribute) {
+
+                    if (
+                        empty($attribute['attribute_id']) ||
+                        empty($attribute['attribute_option_id'])
+                    ) {
+                        continue;
+                    }
+
+                    VariationAttribute::create([
+                        'variation_id'        => $variation->id,
+                        'attribute_id'        => $attribute['attribute_id'],
+                        'attribute_option_id' => $attribute['attribute_option_id'],
+                        'price_override'      => $attribute['price_override'] ?? null,
+                        'is_price_override'   => ! empty($attribute['price_override']),
+                    ]);
+                }
+
+                $variation->characteristics()->delete();
+
+                foreach ($validated['characteristics'] ?? [] as $characteristic) {
+                    Characteristic::create([
+                        'variation_id' => $variation->id,
+                        'attribute'    => $characteristic['attribute'],
+                    ]);
+                }
+
+                return $variation->fresh();
+            });
+
+            RecalculateVariationPriceJob::dispatch($updated->id);
+
+            return $this->updatedResponse($updated);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+    private function validateVariation(Request $request, $ignoreId = null)
+    {
+        $rule = Rule::unique('variations', 'sku');
 
         if ($ignoreId) {
-
-            $uniqueSkuRule->ignore($ignoreId);
+            $rule->ignore($ignoreId);
         }
 
         return $request->validate([
+            'product_id'                       => ['required', 'exists:products,id'],
+            'sku'                              => ['required', 'string', 'max:100', $rule],
+            'base_price'                       => ['required', 'numeric', 'min:0'],
+            'base_buy_price'                   => ['required', 'numeric', 'min:0'],
+            'quantity'                         => ['nullable', 'integer', 'min:0'],
+            'sold_count'                       => ['nullable', 'integer', 'min:0'],
+            'is_default'                       => ['nullable', 'boolean'],
+            'is_active'                        => ['nullable', 'boolean'],
+            'image'                            => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
 
-            /**
-             * Basic fields
-             */
-            'product_id' => [
-                'required',
-                'exists:products,id',
-            ],
+            'attributes'                       => ['nullable', 'array'],
 
-            'sku' => [
-                'required',
-                'string',
-                'max:100',
-                $uniqueSkuRule,
-            ],
+            'attributes.*.attribute_id'        => ['required_with:attributes', 'integer', 'exists:attributes,id'],
+            'attributes.*.attribute_option_id' => ['required_with:attributes', 'integer', 'exists:attribute_options,id'],
+         
+            // 'attributes.*.price_override'      => ['nullable', 'min:0'],
 
-            'price' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
-
-            'quantity' => [
-                'nullable',
-                'integer',
-                'min:0',
-            ],
-
-            'sold_count' => [
-                'nullable',
-                'integer',
-                'min:0',
-            ],
-
-            'is_default' => [
-                'nullable',
-                'boolean',
-            ],
-
-            'is_active' => [
-                'nullable',
-                'boolean',
-            ],
-
-            /**
-             * Main image
-             */
-            'image' => [
-                'nullable',
-                'image',
-                'mimes:jpg,jpeg,png,webp',
-                'max:2048',
-            ],
-
-            'remove_image' => [
-                'nullable',
-                'boolean',
-            ],
-
-            /**
-             * Gallery images
-             */
-            'images' => [
-                'nullable',
-                'array',
-            ],
-
-            'images.*' => [
-                'image',
-                'mimes:jpg,jpeg,png,webp',
-                'max:2048',
-            ],
-
-            'deleted_images' => [
-                'nullable',
-                'array',
-            ],
-
-            'deleted_images.*' => [
-                'integer',
-                'exists:variation_images,id',
-            ],
-
-            /**
-             * Attributes
-             */
-            'attributes' => [
-                'nullable',
-                'array',
-            ],
-
-            'attributes.*.attribute_id' => [
-                'required',
-                'integer',
-                'exists:attributes,id',
-            ],
-
-            'attributes.*.attribute_option_id' => [
-                'required',
-                'integer',
-                'exists:attribute_options,id',
-            ],
-
-            /**
-             * Characteristics
-             */
-            'characteristics' => [
-                'nullable',
-                'array',
-            ],
-
-            'characteristics.*.attribute' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
+            'characteristics'                  => ['nullable', 'array'],
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NORMALIZER
+    |--------------------------------------------------------------------------
+    */
+    private function normalizePriceOverride($value)
+    {
+        if ($value === '' || $value === null) {
+            return null;
+        }
+
+        return (float) $value;
     }
 }

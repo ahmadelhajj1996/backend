@@ -1,65 +1,44 @@
 <?php
-
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\Variation;
+use App\Services\CurrencyService;
 
 class VariationPriceService
 {
-    /**
-     * Recalculate all SYP prices
-     * using old and new exchange rates
-     */
-    public static function updatePrices(
-        float $newRate
-    ): void {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Get previous exchange rate
-        |--------------------------------------------------------------------------
-        */
+    public static function updateSellPrices(): void
+    {
+        $rate = CurrencyService::getRate();
 
-        $oldRate = DB::table('exchange_rates')
-            ->latest('id')
-            ->skip(1)
-            ->value('rate');
+        Variation::query()
+            ->whereNotNull('base_price')
+            ->chunkById(500, function ($variations) use ($rate) {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Safety check
-        |--------------------------------------------------------------------------
-        */
+                foreach ($variations as $variation) {
 
-        if (! $oldRate || $oldRate <= 0) {
-            return;
-        }
+                    $variation->forceFill([
+                        'sell_price' => round($variation->base_price * $rate, 2),
+                        'sell_rate'  => $rate,
+                    ])->saveQuietly();
+                }
+            });
+    }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Formula
-        |--------------------------------------------------------------------------
-        |
-        | old_price_syp / old_rate = usd
-        | usd * new_rate = new_syp
-        |
-        | simplified:
-        |
-        | new_price =
-        | (price / old_rate) * new_rate
-        |
-        |--------------------------------------------------------------------------
-        */
+    public static function updateBuyPrices(): void
+    {
+        $rate = CurrencyService::getRate();
 
-        DB::statement("
-            UPDATE variations
-            SET price = ROUND(
-                (price / ?) * ?,
-                2
-            )
-        ", [
-            $oldRate,
-            $newRate,
-        ]);
+        Variation::query()
+            ->whereNotNull('base_buy_price')
+            ->chunkById(500, function ($variations) use ($rate) {
+
+                foreach ($variations as $variation) {
+                    $variation->forceFill([
+                        'buy_price' => round($variation->base_buy_price * $rate, 2),
+                        'buy_rate'  => $rate,
+                    ])->saveQuietly();
+                }
+            });
     }
 }

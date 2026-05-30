@@ -6,40 +6,40 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
 
     public function up(): void
-{
-    Schema::create('variation_attributes', function (Blueprint $table) {
+    {
+        Schema::create('variation_attributes', function (Blueprint $table) {
 
-        $table->id();
+            $table->id();
 
-        $table->foreignId('variation_id')
-            ->constrained()
-            ->cascadeOnDelete();
+            $table->foreignId('variation_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-        $table->foreignId('attribute_id')
-            ->constrained()
-            ->cascadeOnDelete();
+            $table->foreignId('attribute_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-        $table->foreignId('attribute_option_id')
-            ->constrained()
-            ->cascadeOnDelete();
- 
-            
-        $table->timestamps();
+            $table->foreignId('attribute_option_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-        // $table->unique([
-        //     'variation_id',
-        //     'attribute_id'
-        // ], 'variation_attribute_unique');
+            $table->decimal('price_override', 15, 2)->nullable();
+            $table->boolean('is_price_override')->default(false);
 
-        $table->index('variation_id');
-        $table->index('attribute_id');
-        $table->index('attribute_option_id');
-    });
-}
+            $table->timestamps();
 
+            // $table->unique([
+            //     'variation_id',
+            //     'attribute_id'
+            // ], 'variation_attribute_unique');
+
+            $table->index('variation_id');
+            $table->index('attribute_id');
+            $table->index('attribute_option_id');
+        });
+    }
 
     public function down(): void
     {

@@ -5,13 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\VariationAttribute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use App\Jobs\RecalculateVariationPriceJob;
 
 class VariationAttributeController extends Controller
 {
-    /**
-     * Display a listing of variation attributes.
-     */
     public function index(Request $request)
     {
         try {
@@ -21,12 +18,6 @@ class VariationAttributeController extends Controller
                 'attribute',
                 'option.attribute',
             ]);
-
-            /*
-            |--------------------------------------------------------------------------
-            | Filters
-            |--------------------------------------------------------------------------
-            */
 
             if ($request->filled('variation_id')) {
                 $query->where('variation_id', $request->variation_id);
@@ -40,44 +31,28 @@ class VariationAttributeController extends Controller
                 $query->where('attribute_option_id', $request->attribute_option_id);
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Search
-            |--------------------------------------------------------------------------
-            */
-
             if ($request->filled('search')) {
 
                 $search = $request->search;
 
                 $query->where(function ($q) use ($search) {
 
-                    $q->whereHas('variation', function ($vq) use ($search) {
-                        $vq->where('sku', 'like', "%{$search}%");
-                    })
-
-                    ->orWhereHas('option', function ($oq) use ($search) {
-                        $oq->where('name', 'like', "%{$search}%");
-                    })
-
-                    ->orWhereHas('attribute', function ($aq) use ($search) {
-                        $aq->where('name', 'like', "%{$search}%");
-                    });
-
+                    $q->whereHas('variation', fn ($vq) =>
+                        $vq->where('sku', 'like', "%{$search}%")
+                    )
+                    ->orWhereHas('option', fn ($oq) =>
+                        $oq->where('name', 'like', "%{$search}%")
+                    )
+                    ->orWhereHas('attribute', fn ($aq) =>
+                        $aq->where('name', 'like', "%{$search}%")
+                    );
                 });
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Sorting
-            |--------------------------------------------------------------------------
-            */
-
             $sortField = $request->get('sort_by', 'id');
-
             $sortOrder = $request->get('sort_order', 'asc');
 
-            $allowedSortFields = [
+            $allowed = [
                 'id',
                 'variation_id',
                 'attribute_id',
@@ -85,274 +60,134 @@ class VariationAttributeController extends Controller
                 'created_at',
             ];
 
-            if (!in_array($sortField, $allowedSortFields)) {
+            if (!in_array($sortField, $allowed)) {
                 $sortField = 'id';
             }
 
-            $query->orderBy($sortField, $sortOrder);
-
-            /*
-            |--------------------------------------------------------------------------
-            | Pagination
-            |--------------------------------------------------------------------------
-            */
-
-            $perPage = (int) $request->get('per_page', 15);
-
-            $variationAttributes = $query->paginate($perPage);
-
             return $this->successResponse(
-                $variationAttributes,
+                $query->orderBy($sortField, $sortOrder)
+                      ->paginate($request->get('per_page', 15)),
                 'Variation attributes retrieved successfully'
             );
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve variation attributes: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Store a newly created variation attribute.
-     */
-    public function store(Request $request)
-    {
-        try {
-
-            $validated = $this->validateVariationAttribute($request);
-
-            $variationAttribute = DB::transaction(function () use ($validated) {
-
-                return VariationAttribute::create($validated);
-
-            });
-
-            return $this->createdResponse(
-                $variationAttribute->load([
-                    'variation',
-                    'attribute',
-                    'option.attribute',
-                ]),
-                'Variation attribute created successfully'
-            );
-
-        } catch (ValidationException $e) {
-
-            return $this->validationErrorResponse(
-                $e->errors(),
-                'Validation failed'
-            );
-
-        } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to create variation attribute: ' . $e->getMessage(),
-                500
-            );
-        }
-    }
-
-    /**
-     * Display the specified variation attribute.
-     */
     public function show($id)
     {
         try {
 
-            $variationAttribute = VariationAttribute::with([
+            $data = VariationAttribute::with([
                 'variation',
                 'attribute',
                 'option.attribute',
             ])->find($id);
 
-            if (!$variationAttribute) {
-                return $this->notFoundResponse(
-                    'Variation attribute not found'
-                );
+            if (!$data) {
+                return $this->notFoundResponse('Not found');
             }
 
-            return $this->successResponse(
-                $variationAttribute,
-                'Variation attribute retrieved successfully'
-            );
+            return $this->successResponse($data);
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve variation attribute: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Update the specified variation attribute.
-     */
-    public function update(Request $request, $id)
-    {
-        try {
-
-            $variationAttribute = VariationAttribute::find($id);
-
-            if (!$variationAttribute) {
-                return $this->notFoundResponse(
-                    'Variation attribute not found'
-                );
-            }
-
-            $validated = $this->validateVariationAttribute($request);
-
-            $updated = DB::transaction(function () use (
-                $variationAttribute,
-                $validated
-            ) {
-
-                $variationAttribute->update($validated);
-
-                return $variationAttribute->fresh();
-
-            });
-
-            return $this->updatedResponse(
-                $updated->load([
-                    'variation',
-                    'attribute',
-                    'option.attribute',
-                ]),
-                'Variation attribute updated successfully'
-            );
-
-        } catch (ValidationException $e) {
-
-            return $this->validationErrorResponse(
-                $e->errors(),
-                'Validation failed'
-            );
-
-        } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to update variation attribute: ' . $e->getMessage(),
-                500
-            );
-        }
-    }
-
-    /**
-     * Remove the specified variation attribute.
-     */
     public function destroy($id)
     {
         try {
 
-            $variationAttribute = VariationAttribute::find($id);
+            $attr = VariationAttribute::find($id);
 
-            if (!$variationAttribute) {
-
-                return $this->notFoundResponse(
-                    'Variation attribute not found'
-                );
+            if (!$attr) {
+                return $this->notFoundResponse('Not found');
             }
 
-            DB::transaction(function () use ($variationAttribute) {
+            DB::transaction(fn () => $attr->delete());
 
-                $variationAttribute->delete();
-
-            });
-
-            return $this->deletedResponse(
-                'Variation attribute deleted successfully'
-            );
+            return $this->deletedResponse('Deleted successfully');
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to delete variation attribute: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Get all attributes for a specific variation.
-     */
     public function getByVariation($variationId)
     {
         try {
 
-            $attributes = VariationAttribute::where(
-                'variation_id',
-                $variationId
-            )
-
-            ->with([
-                'attribute',
-                'option.attribute',
-            ])
-
-            ->get();
-
             return $this->successResponse(
-                $attributes,
-                'Variation attributes retrieved successfully'
+                VariationAttribute::where('variation_id', $variationId)
+                    ->with(['attribute', 'option.attribute'])
+                    ->get()
             );
 
         } catch (\Exception $e) {
-
-            return $this->errorResponse(
-                'Failed to retrieve variation attributes: ' . $e->getMessage(),
-                500
-            );
+            return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /**
-     * Validate variation attribute data.
-     */
-    private function validateVariationAttribute(Request $request): array
+    public function store(Request $request)
     {
-        $validated = $request->validate([
+        try {
 
-            'variation_id' => [
-                'required',
-                'exists:variations,id',
-            ],
+            $validated = $this->validateData($request);
 
-            'attribute_id' => [
-                'required',
-                'exists:attributes,id',
-            ],
+            $attr = DB::transaction(fn () =>
+                VariationAttribute::create([
+                    'variation_id' => $validated['variation_id'],
+                    'attribute_id' => $validated['attribute_id'],
+                    'attribute_option_id' => $validated['attribute_option_id'],
+                    'price_override' => $validated['price_override'] ?? null,
+                    'is_price_override' => isset($validated['price_override']),
+                ])
+            );
 
-            'attribute_option_id' => [
-                'required',
-                'exists:attribute_options,id',
-            ],
+            RecalculateVariationPriceJob::dispatch($attr->variation_id);
 
-        ]);
- 
-        
-        $optionExists = DB::table('attribute_options')
+            return $this->createdResponse($attr->load(['variation', 'attribute', 'option.attribute']));
 
-            ->where('id', $validated['attribute_option_id'])
-
-            ->where('attribute_id', $validated['attribute_id'])
-
-            ->exists();
-
-        if (!$optionExists) {
-
-            throw ValidationException::withMessages([
-
-                'attribute_option_id' => [
-                    'The selected option does not belong to the selected attribute.',
-                ],
-
-            ]);
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
         }
+    }
 
-        return $validated;
+    public function update(Request $request, $id)
+    {
+        try {
+
+            $attr = VariationAttribute::findOrFail($id);
+            $validated = $this->validateData($request);
+
+            DB::transaction(fn () =>
+                $attr->update([
+                    'variation_id' => $validated['variation_id'],
+                    'attribute_id' => $validated['attribute_id'],
+                    'attribute_option_id' => $validated['attribute_option_id'],
+                    'price_override' => $validated['price_override'] ?? null,
+                    'is_price_override' => isset($validated['price_override']),
+                ])
+            );
+
+            RecalculateVariationPriceJob::dispatch($attr->variation_id);
+
+            return $this->updatedResponse($attr->fresh()->load(['variation', 'attribute', 'option.attribute']));
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500);
+        }
+    }
+
+    private function validateData(Request $request)
+    {
+        return $request->validate([
+            'variation_id' => ['required', 'exists:variations,id'],
+            'attribute_id' => ['required', 'exists:attributes,id'],
+            'attribute_option_id' => ['required', 'exists:attribute_options,id'],
+            'price_override' => ['nullable', 'numeric', 'min:0'],
+        ]);
     }
 }

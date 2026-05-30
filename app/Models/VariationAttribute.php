@@ -1,11 +1,9 @@
 <?php
-
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
 
 class VariationAttribute extends Model
 {
@@ -15,8 +13,15 @@ class VariationAttribute extends Model
         'variation_id',
         'attribute_id',
         'attribute_option_id',
+        'price_override',
+        'is_price_override',
     ];
 
+    protected $casts = [
+        'price_override'    => 'decimal:1',
+        'is_price_override' => 'boolean',
+    ];
+    
     protected $appends = [
         'name',
         'value',

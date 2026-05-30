@@ -31,11 +31,9 @@ Route::prefix('admin')->group(function () {
 });
 
 Route::get('exchange-rates', [ExchangeRateController::class, 'index']);
+Route::post('exchange-rates/update-prices',[ExchangeRateController::class, 'updatePrices']);
 
-Route::post(
-    'exchange-rates/update-prices',
-    [ExchangeRateController::class, 'updatePrices']
-);
+Route::post('exchange-rates/fetch', [ExchangeRateController::class, 'fetch']);
 
 Route::prefix('client')->group(function () {
     Route::post('register', [ClientController::class, 'register']);

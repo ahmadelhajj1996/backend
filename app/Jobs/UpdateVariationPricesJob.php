@@ -1,23 +1,23 @@
 <?php
-
 namespace App\Jobs;
 
-use App\Services\VariationPriceService;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use App\Services\VariationPriceService;
 
 class UpdateVariationPricesJob implements ShouldQueue
 {
-    use Queueable;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(
-        public float $rate
-    ) {}
+    public int $tries = 3;
+    public int $timeout = 120;
 
     public function handle(): void
     {
-        VariationPriceService::updatePrices(
-            $this->rate
-        );
+        VariationPriceService::updateSellPrices();
+        VariationPriceService::updateBuyPrices();
     }
 }

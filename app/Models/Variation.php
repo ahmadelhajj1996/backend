@@ -1,9 +1,8 @@
 <?php
+
 namespace App\Models;
 
 use App\Helpers\ImageHelper;
-use App\Models\Characteristic;
-use App\Services\CurrencyService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,33 +12,96 @@ class Variation extends Model
 {
     use HasFactory;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mass Assignment
+    |--------------------------------------------------------------------------
+    */
+
     protected $fillable = [
         'product_id',
         'sku',
-        'price',
+
+        // Sell
+        'sell_price',
+        'base_price',
+        'sell_rate',
+
+        // Buy
+        'buy_price',
+        'base_buy_price',
+        'buy_rate',
+
+        // Inventory
         'quantity',
         'sold_count',
+
+        // Status
         'is_default',
-        'image',
         'is_active',
+        'image',
+
+        // Cached computed fields (IMPORTANT)
+        'cached_final_price',
+        'cached_profit',
+        'cached_profit_percentage',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | Type Casting
+    |--------------------------------------------------------------------------
+    */
+
     protected $casts = [
-        'price'      => 'decimal:2',
-        'quantity'   => 'integer',
-        'sold_count' => 'integer',
-        'is_default' => 'boolean',
-        'is_active'  => 'boolean',
+        // Sell
+        'sell_price'     => 'decimal:1',
+        'base_price'     => 'decimal:1',
+        'sell_rate'      => 'decimal:2',
+
+        // Buy
+        'buy_price'      => 'decimal:1',
+        'base_buy_price' => 'decimal:1',
+        'buy_rate'       => 'decimal:2',
+
+        // Inventory
+        'quantity'       => 'integer',
+        'sold_count'     => 'integer',
+
+        // Status
+        'is_default'     => 'boolean',
+        'is_active'      => 'boolean',
+
+        // Cached fields
+        'cached_final_price'      => 'decimal:1',
+        'cached_profit'           => 'decimal:1',
+        'cached_profit_percentage'=> 'decimal:1',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Appended Attributes
+    |--------------------------------------------------------------------------
+    */
 
     protected $appends = [
         'image_url',
         'is_in_stock',
+
+        // Pricing (FAST)
         'final_price',
         'usd_price',
-        'new_price',
- 
+
+        // Analytics (FAST)
+        'profit',
+        'profit_percentage',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
 
     public function product(): BelongsTo
     {
@@ -48,12 +110,14 @@ class Variation extends Model
 
     public function attributes(): HasMany
     {
-        return $this->hasMany(VariationAttribute::class)->with(['attribute', 'option']);
+        return $this->hasMany(VariationAttribute::class)
+            ->with(['attribute', 'option']);
     }
 
     public function images(): HasMany
     {
-        return $this->hasMany(VariationImage::class)->orderBy('sort_order');
+        return $this->hasMany(VariationImage::class)
+            ->orderBy('sort_order');
     }
 
     public function orderItems(): HasMany
@@ -66,6 +130,12 @@ class Variation extends Model
         return $this->hasMany(Characteristic::class);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors (NOW PURE CACHE READS ONLY)
+    |--------------------------------------------------------------------------
+    */
+
     public function getImageUrlAttribute(): ?string
     {
         return ImageHelper::url($this->image);
@@ -76,34 +146,37 @@ class Variation extends Model
         return $this->quantity > 0;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pricing (CACHE-ONLY HOT PATH)
+    |--------------------------------------------------------------------------
+    */
+
     public function getFinalPriceAttribute(): float
     {
-        $modifier = $this->attributes()
-            ->get()
-            ->sum(fn($attr) => $attr->option?->price_modifier ?? 0);
-
-        return (float) $this->price + $modifier;
+        return (float) ($this->cached_final_price ?? 0);
     }
 
     public function getUsdPriceAttribute(): ?float
     {
-        $value = CurrencyService::sypToUsd(
-            $this->final_price
-        );
-
-        return $value !== null
-            ? round($value, 2)
+        return $this->base_price
+            ? (float) round($this->base_price, 2)
             : null;
     }
-    public function getNewPriceAttribute(): ?float
+
+    /*
+    |--------------------------------------------------------------------------
+    | Profit (CACHE-ONLY HOT PATH)
+    |--------------------------------------------------------------------------
+    */
+
+    public function getProfitAttribute(): float
     {
-        return round(
-            $this->final_price / 100,
-            2
-        );
+        return (float) ($this->cached_profit ?? 0);
     }
 
+    public function getProfitPercentageAttribute(): float
+    {
+        return (float) ($this->cached_profit_percentage ?? 0);
+    }
 }
-
-
-// update variation price  , get current dollar exchange
