@@ -17,7 +17,7 @@ class SearchController extends Controller
             ->select(["id", "name", "slug", "featured_image", "category_id"])
             ->with([
                 "category:id,name",
-                "variations:id,product_id,image,price,sku",
+                "variations:id,product_id,image,sku",
             ])
             ->where("is_active", true)
             ->where("status", "published")
