@@ -14,8 +14,9 @@ use App\Http\Controllers\VariationAttributeController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\VariationImageController;
 use App\Http\Controllers\ExchangeRateController;
-
 use Illuminate\Support\Facades\Route;
+
+
 
 Route::prefix('admin')->group(function () {
     Route::post('login', [AdminController::class, 'login']);

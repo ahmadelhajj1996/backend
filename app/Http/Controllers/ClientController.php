@@ -47,6 +47,7 @@ class ClientController extends Controller
         return $this->respondWithToken($token, Auth::guard('client')->user());
     }
 
+    
     public function logout()
     {
         Auth::guard('client')->logout();

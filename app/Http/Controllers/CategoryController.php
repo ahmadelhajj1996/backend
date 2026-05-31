@@ -13,9 +13,15 @@ use Illuminate\Validation\Rule;
 class CategoryController extends Controller
 {
 
-    public function index(): JsonResponse
+    public function index(Request $request)
     {
-        $categories = Category::with(['parent', 'children'])->get();
+        $query = Category::with(['parent', 'children']);
+
+        if ($request->filled('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        }
+
+        $categories = $query->get();
 
         return $this->successResponse(
             $categories,

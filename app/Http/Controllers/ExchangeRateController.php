@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Jobs\UpdateVariationPricesJob;
 use App\Models\ExchangeRate;
 use Illuminate\Support\Facades\Artisan;
+use App\Services\CurrencyService;
 
 class ExchangeRateController extends Controller
 {
@@ -64,6 +65,9 @@ class ExchangeRateController extends Controller
             );
         }
 
+        CurrencyService::clearRateCache();
+
+        // UpdateVariationPricesJob::dispatchSync();
         UpdateVariationPricesJob::dispatch();
 
         return $this->successResponse(
