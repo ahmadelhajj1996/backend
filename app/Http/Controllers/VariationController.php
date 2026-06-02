@@ -27,7 +27,7 @@ class VariationController extends Controller
                 'attributes.option.attribute:id,name',
                 'characteristics:id,variation_id,attribute',
             ]);
-
+                
             if ($request->has('product_id')) {
                 $query->where('product_id', $request->product_id);
             }

@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\ImageHelper;
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,131 @@ class ProductController extends Controller
         }
     }
 
+    public function categoryProducts(Request $request, $id)
+    {
+        try {
+
+            $parentCategory = Category::select(
+                'id',
+                'name',
+            )
+                ->with([
+                    'children' => function ($query) {
+
+                        $query->select(
+                            'id',
+                            'name',
+                            'parent_id',
+                        )
+                            ->where('is_active', true)
+                            ->orderBy('name');
+                    },
+                ])
+                ->where('is_active', true)
+                ->findOrFail($id);
+
+            $childIds = $parentCategory->children
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($childIds)) {
+
+                $childIds = [$parentCategory->id];
+            }
+
+            $query = Product::select(
+                'id',
+                'category_id',
+                'name',
+            )
+                ->with([
+                    'category:id',
+                    'firstVariation:id,product_id,sku,sell_price',
+                ])
+                ->published();
+
+
+                if ($request->filled('category_id')) {
+                $categoryId = (int) $request->category_id;
+                $query->where('category_id', $categoryId);
+
+            } else {
+
+                $query->whereIn('category_id', $childIds);
+            }
+
+            if ($request->filled('search')) {
+
+                $search = $request->search;
+
+                $query->where(function ($q) use ($search) {
+
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%");
+                });
+            }
+
+            $sortField = $request->get(
+                'sort_by',
+                'created_at'
+            );
+
+            $sortOrder = $request->get(
+                'sort_order',
+                'desc'
+            );
+
+            $allowedSortFields = [
+                'id',
+                'name',
+                'created_at',
+                'updated_at',
+                'view_count',
+                'sold_count',
+            ];
+
+            if (in_array($sortField, $allowedSortFields)) {
+
+                $query->orderBy($sortField, $sortOrder);
+            }
+
+            /*
+        |--------------------------------------------------------------------------
+        | PAGINATION
+        |--------------------------------------------------------------------------
+        */
+
+            $perPage = $request->get('per_page', 20);
+
+            $products = $query->paginate($perPage);
+
+            /*
+        |--------------------------------------------------------------------------
+        | RESPONSE DATA
+        |--------------------------------------------------------------------------
+        */
+
+            $data = [
+                'category'         => $parentCategory,
+                'child_categories' => $parentCategory->children,
+                'products'         => $products,
+            ];
+
+            return $this->successResponse(
+                $data,
+                'Products retrieved successfully'
+            );
+
+        } catch (\Exception $e) {
+
+            return $this->errorResponse(
+                'Failed to retrieve products',
+                500
+            );
+        }
+    }
+
     public function featured()
     {
         try {
@@ -99,7 +225,7 @@ class ProductController extends Controller
             $products = Product::with([
                 'category:id,name',
                 'variations.images',
-                ''
+                '',
 
             ])
                 ->where('is_featured', true)

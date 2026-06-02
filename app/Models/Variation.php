@@ -22,68 +22,43 @@ class Variation extends Model
         'product_id',
         'sku',
 
-        // Sell
         'sell_price',
         'base_price',
         'sell_rate',
 
-        // Buy
         'buy_price',
         'base_buy_price',
         'buy_rate',
-
-        // Inventory
         'quantity',
         'sold_count',
-
-        // Status
         'is_default',
         'is_active',
         'image',
-
-        // Cached computed fields (IMPORTANT)
         'cached_final_price',
         'cached_profit',
         'cached_profit_percentage',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Type Casting
-    |--------------------------------------------------------------------------
-    */
+     protected $casts = [
+        'sell_price'     => 'decimal:0',
+        'base_price'     => 'decimal:2',
+        'sell_rate'      => 'decimal:1',
+        'buy_price'      => 'decimal:0',
+        'base_buy_price' => 'decimal:2',
+        'buy_rate'       => 'decimal:0',
 
-    protected $casts = [
-        // Sell
-        'sell_price'     => 'decimal:1',
-        'base_price'     => 'decimal:1',
-        'sell_rate'      => 'decimal:2',
-
-        // Buy
-        'buy_price'      => 'decimal:1',
-        'base_buy_price' => 'decimal:1',
-        'buy_rate'       => 'decimal:2',
-
-        // Inventory
         'quantity'       => 'integer',
         'sold_count'     => 'integer',
 
-        // Status
         'is_default'     => 'boolean',
         'is_active'      => 'boolean',
 
-        // Cached fields
-        'cached_final_price'      => 'decimal:1',
+        'cached_final_price'      => 'decimal:0',
         'cached_profit'           => 'decimal:1',
         'cached_profit_percentage'=> 'decimal:1',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Appended Attributes
-    |--------------------------------------------------------------------------
-    */
-
+ 
     protected $appends = [
         'image_url',
         'is_in_stock',

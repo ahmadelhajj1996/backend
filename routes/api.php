@@ -89,3 +89,9 @@ Route::post(
 );
 
 Route::get("/search", [SearchController::class, "index"]);
+
+
+Route::get(
+    '/{id}/products',
+    [ProductController::class, 'categoryProducts']
+);

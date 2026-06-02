@@ -1,12 +1,12 @@
 <?php
 namespace App\Models;
 
+use App\Helpers\ImageHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Helpers\ImageHelper;
 
 class Product extends Model
 {
@@ -15,7 +15,7 @@ class Product extends Model
     protected $fillable = [
         'category_id', 'name', 'slug', 'description',
         'short_description', 'barcode',
-        'featured_image', 'status', 'sku' ,
+        'featured_image', 'status', 'sku',
         'is_featured', 'is_active', 'view_count', 'sold_count',
     ];
 
@@ -40,6 +40,10 @@ class Product extends Model
         return $this->hasMany(Variation::class);
     }
 
+    public function firstVariation()
+    {
+        return $this->hasOne(Variation::class)->orderBy('id')->with('images');
+    }
 
     public function scopePublished($query)
     {

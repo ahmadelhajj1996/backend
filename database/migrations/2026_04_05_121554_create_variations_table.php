@@ -34,14 +34,7 @@ return new class extends Migration
             $table->string('sku')
                 ->unique();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Selling Prices
-            |--------------------------------------------------------------------------
-            */
-
-            // Local sell price (SYP)
-            $table->decimal('sell_price', 15, 2)
+             $table->decimal('sell_price', 15, 0)
                 ->default(0);
 
             // USD sell price
@@ -49,7 +42,7 @@ return new class extends Migration
                 ->nullable();
 
             // Exchange rate used for sell price
-            $table->decimal('sell_rate', 15, 4)
+            $table->decimal('sell_rate', 15, 1)
                 ->nullable();
 
             /*
@@ -59,7 +52,7 @@ return new class extends Migration
             */
 
             // Local supplier cost (SYP)
-            $table->decimal('buy_price', 15, 2)
+            $table->decimal('buy_price', 15, 0)
                 ->default(0);
 
             // USD supplier cost
@@ -67,7 +60,7 @@ return new class extends Migration
                 ->nullable();
 
             // Exchange rate used for supplier cost
-            $table->decimal('buy_rate', 15, 4)
+            $table->decimal('buy_rate', 15, 1)
                 ->nullable();
 
             /*
@@ -82,13 +75,13 @@ return new class extends Migration
             $table->unsignedInteger('sold_count')
                 ->default(0);
 
-            $table->decimal('cached_final_price', 10, 2)
+            $table->decimal('cached_final_price', 10, 0)
                 ->nullable();
 
-            $table->decimal('cached_profit', 10, 2)
+            $table->decimal('cached_profit', 10, 1)
                 ->nullable();
 
-            $table->decimal('cached_profit_percentage', 10, 2)
+            $table->decimal('cached_profit_percentage', 10, 1)
                 ->nullable();
 
 

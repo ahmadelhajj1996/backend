@@ -16,7 +16,7 @@ class Category extends Model
         'name', 'slug', 'description', 'parent_id', 'image', 'is_active',
     ];
 
-    protected $appends = ['image_url'];
+    // protected $appends = ['image_url'];
 
     protected $casts = [
         'is_active' => 'boolean',
@@ -69,10 +69,10 @@ class Category extends Model
         return $ancestors;
     }
 
-    public function getImageUrlAttribute(): ?string
-    {
-        return $this->image
-            ? ImageHelper::url($this->image)
-            : null;
-    }
+    // public function getImageUrlAttribute(): ?string
+    // {
+    //     return $this->image
+    //         ? ImageHelper::url($this->image)
+    //         : null;
+    // }
 }
