@@ -11,6 +11,9 @@ return Application::configure(basePath: dirname(__DIR__))
         channels: __DIR__ . '/../routes/channels.php',
         health: '/up',
     )
+    ->withBroadcasting( // ✅ add this
+        channels: __DIR__ . '/../routes/channels.php',
+    )
     ->withMiddleware(function ($middleware) {
         $middleware->alias([
             'jwt.auth' => \App\Http\Middleware\JwtAuth::class,

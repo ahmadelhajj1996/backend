@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Notifications;
 
 use App\Models\Variation;
@@ -12,101 +13,94 @@ class LowStockNotification extends Notification implements ShouldQueue
     use Queueable;
 
     public $variation;
-
     public $type;
+    public $selectedAttributes;
 
-    public function __construct(Variation $variation, string $type)
+    public function __construct(Variation $variation, string $type, array $selectedAttributes = [])
     {
-        $this->variation = $variation;
-
-        $this->type = $type;
+        $this->variation          = $variation;
+        $this->type               = $type;
+        $this->selectedAttributes = $selectedAttributes;
     }
 
-    /**
-     * Channels
-     */
     public function via($notifiable)
     {
         return ['database', 'broadcast'];
     }
 
-    /**
-     * Database Notification
-     */
     public function toArray($notifiable)
     {
-        $productName = $this->variation->product?->name;
+        $variation   = $this->variation;
+        $productName = $variation->product?->name;
+        $sku         = $variation->sku;
+        $quantity    = $variation->quantity;
+        $variationId = $variation->id;
 
-        $sku = $this->variation->sku;
+        $attributeString = "#{$variationId}";
 
-        $quantity = $this->variation->quantity;
+        if (!empty($this->selectedAttributes)) {
 
-        $variationId = $this->variation->id;
+            $parts = [];
 
-        /*
-        |--------------------------------------------------------------------------
-        | Critical Warning
-        |--------------------------------------------------------------------------
-        */
+            foreach ($this->selectedAttributes as $attr) {
+                if (isset($attr['name'], $attr['value'])) {
+                    $parts[] = trim($attr['name']) . ': ' . trim($attr['value']);
+                }
+            }
 
-        if ($this->type === 'critical') {
+            if (!empty($parts)) {
+                $attributeString = implode(' - ', $parts);
+            }
 
-            return [
+        } else {
+            $readableAttributes = $variation->resolveReadableAttributes();
 
-                'title'   => 'تحذير حرج بالمخزون',
+            if (!empty($readableAttributes) && is_array($readableAttributes)) {
 
-                'code'    => 'critical_quantity_warning',
+                $formattedAttributes = [];
 
-                'message' => "    الشكل :  {$variationId} للمنتج : {$productName}    ( أوشك على النفاذ، الكمية المتبقية فقط : {$quantity} )",
-
-                'variation_id'       => $variationId,
-
-                'product_id'         => $this->variation->product_id,
-
-                'sku'                => $sku,
-
-                'remaining_quantity' => $quantity,
-
-                'image'              => $this->variation->image_url,
-
-                'time'               => now()->format('m-d h:i a'),
-            ];
+                foreach ($readableAttributes as $attr) {
+                    if (isset($attr['attribute_name'], $attr['value'])) {
+                        $name  = trim($attr['attribute_name']);
+                        $value = trim($attr['value']);
+                        $formattedAttributes[$name] = "{$name}: {$value}";
+                    }
+                }
+                if (!empty($formattedAttributes)) {
+                    $attributeString = implode(' - ', $formattedAttributes);
+                }
+            }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Low Stock Warning
-        |--------------------------------------------------------------------------
-        */
-
-        return [
-
-            'title'   => 'تنبيه انخفاض المخزون',
-
-            'code'    => 'quantity_warning',
-
-            'message' => "          الشكل :  {$variationId} للمنتج : {$productName}    ( الكمية المتبقية   : {$quantity} )",
-
-            'variation_id' => $variationId,
-
-            'product_id' => $this->variation->product_id,
-
-            'sku' => $sku,
-
+        $baseData = [
+            'variation_id'       => $variationId,
+            'product_id'         => $variation->product_id,
+            'sku'                => $sku,
             'remaining_quantity' => $quantity,
-
-            'image' => $this->variation->image_url,
-
-            'time' => now()->format('m-d h:i a'),
+            'image'              => $variation->image_url,
+            'attributes'         => $attributeString,
+            'time'               => now()->format('m-d h:i a'),
         ];
-    }
 
+        if ($this->type === 'critical') {
+            return array_merge($baseData, [
+                'title'   => 'تحذير حرج بالمخزون',
+                'code'    => 'critical_quantity_warning',
+                'message' => " {$attributeString} - المنتج: {$productName} (أوشك على النفاذ، الكمية المتبقية فقط: {$quantity})",
+            ]);
+        }
+
+        return array_merge($baseData, [
+            'title'   => 'تنبيه انخفاض المخزون',
+            'code'    => 'quantity_warning',
+            'message' => " {$attributeString} - المنتج: {$productName} (الكمية المتبقية: {$quantity})",
+        ]);
+    }
 
     public function broadcastType()
     {
         return 'low-stock';
     }
-
 
     public function toBroadcast($notifiable)
     {

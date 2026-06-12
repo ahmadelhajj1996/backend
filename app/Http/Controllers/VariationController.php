@@ -2,349 +2,461 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ImageHelper;
-use App\Jobs\RecalculateVariationPriceJob;
 use App\Models\Characteristic;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\Variation;
-use App\Models\VariationAttribute;
-use App\Models\VariationImage;
 use App\Services\VariationRateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class VariationController extends Controller
 {
+
     public function index(Request $request)
     {
-        try {
+        $query = Variation::with([
+            'product:id,name',
+            'images',
+            'characteristics',
+        ]);
 
-            $query = Variation::with([
-                'product:id,name',
-                'images:id,variation_id,path',
-                'attributes:id,variation_id,attribute_option_id',
-                'attributes.option:id,attribute_id,value,color_code',
-                'attributes.option.attribute:id,name',
-                'characteristics:id,variation_id,attribute',
-            ]);
-                
-            if ($request->has('product_id')) {
-                $query->where('product_id', $request->product_id);
-            }
-
-            if ($request->has('is_active')) {
-                $query->where(
-                    'is_active',
-                    filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN)
-                );
-            }
-
-            return $this->successResponse(
-                $query->latest()->paginate($request->get('per_page', 15)),
-                'Variations retrieved successfully'
-            );
-
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
+        if ($request->product_id) {
+            $query->where('product_id', $request->product_id);
         }
-    }
 
-    public function show($id)
-    {
-        try {
+        $variations = $query->latest()->get();
 
-            $variation = Variation::with([
-                'product',
-                'images',
-                'attributes.option.attribute',
-                'characteristics',
-            ])->find($id);
+        $allOptionIds = $variations->pluck('attributes')
+            ->filter()
+            ->flatMap(fn($attrs) => array_values($attrs))
+            ->unique()
+            ->toArray();
 
-            if (! $variation) {
-                return $this->notFoundResponse('Variation not found');
-            }
-
-            return $this->successResponse($variation);
-
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
+        $attributeLookups = [];
+        if (! empty($allOptionIds)) {
+            $attributeLookups = DB::table('attribute_options')
+                ->join('attributes', 'attributes.id', '=', 'attribute_options.attribute_id')
+                ->whereIn('attribute_options.id', $allOptionIds)
+                ->select(
+                    'attributes.id as attribute_id',
+                    'attributes.name as attribute_name',
+                    'attribute_options.id as option_id',
+                    'attribute_options.value as option_value'
+                )
+                ->get()
+                ->keyBy('option_id')
+                ->toArray();
         }
-    }
 
-    public function destroy($id)
-    {
-        try {
+        // --- STEP 2: GROUP AND PROCESS DATA ---
+        $groupedData = $variations->groupBy('group_key')->map(function ($items, $groupKey) use ($attributeLookups) {
 
-            $variation = Variation::with([
-                'images',
-                'attributes',
-                'characteristics',
-            ])->find($id);
+            $groupImages = $items->pluck('images')->flatten(1)->unique('id')->values();
 
-            if (! $variation) {
-                return $this->notFoundResponse('Variation not found');
-            }
+            $groupCharacteristics = $items->pluck('characteristics')->flatten(1)->unique('id')->values();
 
-            DB::transaction(function () use ($variation) {
+            // Map every item's raw attributes to your detailed structured format
+            $itemsWithDetailedAttrs = $items->map(function ($item) use ($attributeLookups) {
+                $formattedAttrs = [];
+                $rawAttrs       = $item->attributes ?? [];
 
-                foreach ($variation->images as $image) {
-                    ImageHelper::delete($image->path);
+                foreach ($rawAttrs as $attrId => $optionId) {
+                    if (isset($attributeLookups[$optionId])) {
+                        $lookup = $attributeLookups[$optionId];
+
+                        $formattedAttrs[$lookup->attribute_id] = [
+                            'attribute_id'   => $lookup->attribute_id,
+                            'attribute_name' => $lookup->attribute_name,
+                            'option_id'      => $lookup->option_id,
+                            'option_value'   => $lookup->option_value,
+                        ];
+                    }
                 }
 
-                $variation->images()->delete();
-                $variation->attributes()->delete();
-                $variation->characteristics()->delete();
-                $variation->delete();
+                $item->computed_detailed_attributes = $formattedAttrs;
+                return $item;
             });
 
-            return $this->deletedResponse('Variation deleted successfully');
+            $compareAttributes = function ($a, $b) {
+                return ($a['option_id'] <=> $b['option_id']);
+            };
 
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
-        }
-    }
+            $sharedAttributes = [];
+            if ($itemsWithDetailedAttrs->isNotEmpty()) {
+                $sharedAttributes = $itemsWithDetailedAttrs->first()->computed_detailed_attributes;
 
-    public function getByProduct($productId)
-    {
-        try {
-
-            $product = Product::find($productId);
-
-            if (! $product) {
-                return $this->notFoundResponse('Product not found');
+                foreach ($itemsWithDetailedAttrs as $item) {
+                    // Fixed using array_uintersect_assoc
+                    $sharedAttributes = array_uintersect_assoc(
+                        $sharedAttributes,
+                        $item->computed_detailed_attributes,
+                        $compareAttributes
+                    );
+                }
             }
 
-            $variations = Variation::with([
-                'images',
-                'attributes.option.attribute',
-                'characteristics',
-            ])
-                ->where('product_id', $productId)
-                ->where('is_active', true)
-                ->orderBy('is_default', 'desc')
-                ->orderBy('sell_price', 'asc')
-                ->get();
+            $mappedItems = $itemsWithDetailedAttrs->map(function ($item) use ($sharedAttributes, $compareAttributes) {
 
-            return $this->successResponse($variations);
+                // Fixed using array_udiff_assoc
+                $specialAttributes = array_udiff_assoc(
+                    $item->computed_detailed_attributes,
+                    $sharedAttributes,
+                    $compareAttributes
+                );
 
-        } catch (\Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
-        }
+                return [
+                    'id'                       => $item->id,
+                    'product_id'               => $item->product_id,
+                    'sku'                      => $item->sku,
+                    'special_attributes'       => array_values($specialAttributes),
+                    'sell_price'               => $item->sell_price,
+                    'base_price'               => $item->base_price,
+                    'sell_rate'                => $item->sell_rate,
+                    'buy_price'                => $item->buy_price,
+                    'base_buy_price'           => $item->base_buy_price,
+                    'buy_rate'                 => $item->buy_rate,
+                    'quantity'                 => $item->quantity,
+                    'sold_count'               => $item->sold_count,
+                    'cached_final_price'       => $item->cached_final_price,
+                    'cached_profit'            => $item->cached_profit,
+                    'cached_profit_percentage' => $item->cached_profit_percentage,
+                    'is_default'               => $item->is_default,
+                    'is_active'                => $item->is_active,
+                    'created_at'               => $item->created_at,
+                    'updated_at'               => $item->updated_at,
+                    'product'                  => $item->product,
+                ];
+            });
+
+            return [
+                'group_key'       => $groupKey,
+                'images'          => $groupImages,
+                'attributes'      => array_values($sharedAttributes),
+                'characteristics' => $groupCharacteristics,
+                'items'           => $mappedItems,
+            ];
+        })->values();
+
+        return $this->successResponse($groupedData, 'ok');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | STORE
-    |--------------------------------------------------------------------------
-    */
     public function store(Request $request)
     {
+        $validated = $this->validateVariation($request);
+        $rates     = VariationRateService::snapshot();
+
+        DB::beginTransaction();
+
         try {
 
-            $validated = $this->validateVariation($request);
+            $product  = Product::findOrFail($validated['product_id']);
+            $groupKey = $validated['group_key'] ?? Str::uuid()->toString();
 
-            $variation = DB::transaction(function () use ($validated, $request) {
+            $created = [];
 
-                $mainImage = $request->hasFile('image')
-                    ? ImageHelper::upload($request->file('image'), 'variations')
-                    : null;
+            foreach ($validated['variations'] as $index => $item) {
 
-                $rates = VariationRateService::snapshot();
+                $attributes = $item['attributes'] ?? [];
+                ksort($attributes);
 
                 $variation = Variation::create([
                     'product_id'     => $validated['product_id'],
-                    'sku'            => $validated['sku'],
-
-                    'base_price'     => $validated['base_price'],
-                    'base_buy_price' => $validated['base_buy_price'] ?? 0,
-
+                    'group_key'      => $groupKey,
+                    'sku'            => Str::slug($product->name) . '-' . Str::random(16),
+                    'attributes'     => $attributes,
+                    'base_price'     => $item['base_price'],
+                    'base_buy_price' => $item['base_buy_price'],
                     'sell_rate'      => $rates['sell_rate'],
                     'buy_rate'       => $rates['buy_rate'],
-
-                    'sell_price'     => round($validated['base_price'] * $rates['sell_rate'], 2),
-                    'buy_price'      => round(($validated['base_buy_price'] ?? 0) * $rates['buy_rate'], 2),
-
-                    'quantity'       => $validated['quantity'] ?? 0,
-                    'sold_count'     => $validated['sold_count'] ?? 0,
-
-                    'is_default'     => $validated['is_default'] ?? false,
-                    'is_active'      => $validated['is_active'] ?? true,
-                    'image'          => $mainImage,
+                    'sell_price'     => round($item['base_price'] * $rates['sell_rate']),
+                    'buy_price'      => round($item['base_buy_price'] * $rates['buy_rate']),
+                    'quantity'       => $item['quantity'],
+                    'sold_count'     => 0,
+                    'is_default'     => $index === 0,
+                    'is_active'      => true,
                 ]);
 
-                foreach ($validated['attributes'] ?? [] as $attribute) {
+                $created[] = $variation;
+            }
 
-                    if (
-                        empty($attribute['attribute_id']) ||
-                        empty($attribute['attribute_option_id'])
-                    ) {
-                        continue;
-                    }
-
-                    VariationAttribute::create([
-                        'variation_id'        => $variation->id,
-                        'attribute_id'        => $attribute['attribute_id'],
-                        'attribute_option_id' => $attribute['attribute_option_id'],
-                        'price_override'      => $attribute['price_override'] ?? null,
-                        'is_price_override'   => ! empty($attribute['price_override']),
+            $characteristicIds = [];
+            foreach ($validated['characteristics'] ?? [] as $char) {
+                if (! empty($char['name'])) {
+                    // Find or create the master record to prevent global table duplication
+                    $masterChar = Characteristic::firstOrCreate([
+                        'name' => $char['name'],
                     ]);
+                    $characteristicIds[] = $masterChar->id;
                 }
+            }
 
-                foreach ($validated['characteristics'] ?? [] as $characteristic) {
-                    Characteristic::create([
-                        'variation_id' => $variation->id,
-                        'attribute'    => $characteristic['attribute'],
-                    ]);
+            $imageIds = [];
+
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $i => $file) {
+
+                    $hash = md5_file($file->getRealPath());
+
+                    $image = ProductImage::firstOrCreate(
+                        ['hash' => $hash],
+                        [
+                            'path'       => ImageHelper::upload($file, 'variations'),
+                            'sort_order' => $i,
+                        ]
+                    );
+
+                    $imageIds[] = $image->id;
                 }
+            }
 
-                foreach ($request->file('images', []) as $image) {
-                    VariationImage::create([
-                        'variation_id' => $variation->id,
-                        'path'         => ImageHelper::upload($image, 'variations'),
-                    ]);
+            foreach ($created as $v) {
+                if (! empty($characteristicIds)) {
+                    $v->characteristics()->sync($characteristicIds);
                 }
+                if (! empty($imageIds)) {
+                    $v->images()->sync($imageIds);
+                }
+            }
 
-                return $variation;
-            });
+            DB::commit();
 
-            RecalculateVariationPriceJob::dispatch($variation->id);
+            return $this->successResponse($created, 'Variations stored successfully');
 
-            return $this->createdResponse(
-                $variation->load([
-                    'product',
-                    'images',
-                    'attributes.option.attribute',
-                    'characteristics',
-                ])
-            );
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            DB::rollBack();
             return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE
-    |--------------------------------------------------------------------------
-    */
-    public function update(Request $request, $id)
+    public function update(Request $request, $groupKey)
     {
+        $validated = $this->validateVariation($request);
+
+        $rates = VariationRateService::snapshot();
+
+        if (! $groupKey) {
+            return $this->errorResponse("Missing group_key", 422);
+        }
+
+        DB::beginTransaction();
+
         try {
 
-            $variation = Variation::findOrFail($id);
-            $validated = $this->validateVariation($request, $variation->id);
+            $product = Product::findOrFail($validated['product_id']);
 
-            $updated = DB::transaction(function () use ($variation, $validated, $request) {
+            $characteristicIds = [];
+            foreach ($validated['characteristics'] ?? [] as $char) {
+                if (! empty($char['name'])) {
+                    $masterChar = Characteristic::firstOrCreate([
+                        'name' => $char['name'],
+                    ]);
+                    $characteristicIds[] = $masterChar->id;
+                }
+            }
 
-                $rates = VariationRateService::snapshot();
+            $allProcessedVariations = [];
+            $broadcastItems         = [];
 
-                $variation->update([
+            foreach ($validated['variations'] as $index => $item) {
+                $attributes = $item['attributes'] ?? [];
+                ksort($attributes);
+
+                $variationData = [
                     'product_id'     => $validated['product_id'],
-                    'sku'            => $validated['sku'],
-
-                    'base_price'     => $validated['base_price'],
-                    'base_buy_price' => $validated['base_buy_price'] ?? 0,
-
+                    'group_key'      => $groupKey,
+                    'attributes'     => $attributes,
+                    'base_price'     => $item['base_price'],
+                    'base_buy_price' => $item['base_buy_price'],
                     'sell_rate'      => $rates['sell_rate'],
                     'buy_rate'       => $rates['buy_rate'],
+                    'sell_price'     => round($item['base_price'] * $rates['sell_rate']),
+                    'buy_price'      => round($item['base_buy_price'] * $rates['buy_rate']),
+                    'quantity'       => $item['quantity'],
+                    'is_default'     => $index === 0,
+                    'is_active'      => 1,
+                ];
 
-                    'sell_price'     => round($validated['base_price'] * $rates['sell_rate'], 2),
-                    'buy_price'      => round(($validated['base_buy_price'] ?? 0) * $rates['buy_rate'], 2),
+                if (! empty($item['id'])) {
+                    // ✅ Has ID — update existing, never delete
+                    $variation = Variation::findOrFail($item['id']);
+                    $variation->update($variationData);
 
-                    'quantity'       => $validated['quantity'] ?? 0,
-                    'sold_count'     => $validated['sold_count'] ?? 0,
-                    'is_default'     => $validated['is_default'] ?? false,
-                    'is_active'      => $validated['is_active'] ?? true,
-                ]);
+                } elseif (! empty($item['sku'])) {
+                    // ✅ No ID but has SKU — find by SKU to avoid duplicate creation
+                    $variation = Variation::where('sku', $item['sku'])->first();
 
-                $variation->attributes()->delete();
-
-                foreach ($validated['attributes'] ?? [] as $attribute) {
-
-                    if (
-                        empty($attribute['attribute_id']) ||
-                        empty($attribute['attribute_option_id'])
-                    ) {
-                        continue;
+                    if ($variation) {
+                        $variation->update($variationData);
+                    } else {
+                        $variationData['sku']        = $item['sku'];
+                        $variationData['sold_count'] = 0;
+                        $variation                   = Variation::create($variationData);
                     }
 
-                    VariationAttribute::create([
-                        'variation_id'        => $variation->id,
-                        'attribute_id'        => $attribute['attribute_id'],
-                        'attribute_option_id' => $attribute['attribute_option_id'],
-                        'price_override'      => $attribute['price_override'] ?? null,
-                        'is_price_override'   => ! empty($attribute['price_override']),
-                    ]);
+                } else {
+                    // ✅ Truly new variation — create fresh
+                    $variationData['sku']        = Str::slug($product->name) . '-' . Str::uuid();
+                    $variationData['sold_count'] = 0;
+                    $variation                   = Variation::create($variationData);
                 }
 
-                $variation->characteristics()->delete();
+                $broadcastItems[] = [
+                    'id'       => $variation->id,
+                    'quantity' => $variation->quantity,
+                ];
+                $allProcessedVariations[] = $variation;
+            }
 
-                foreach ($validated['characteristics'] ?? [] as $characteristic) {
-                    Characteristic::create([
-                        'variation_id' => $variation->id,
-                        'attribute'    => $characteristic['attribute'],
-                    ]);
+            // Smart image syncing
+            $finalImageIds   = [];
+            $hasImagePayload = false;
+
+            if ($request->has('existing_images')) {
+                $imagesInput = $request->input('existing_images', []);
+                if (is_array($imagesInput) && count($imagesInput) > 0) {
+                    $hasImagePayload = true;
+                    foreach ($imagesInput as $imgData) {
+                        if (
+                            is_array($imgData) &&
+                            isset($imgData['existing']) &&
+                            ($imgData['existing'] === 'true' || $imgData['existing'] === true)
+                        ) {
+                            if (! empty($imgData['id']) && is_numeric($imgData['id']) && $imgData['id'] > 0) {
+                                $finalImageIds[] = (int) $imgData['id'];
+                            }
+                        }
+                    }
                 }
+            }
 
-                return $variation->fresh();
-            });
+            if ($request->hasFile('images')) {
+                $hasImagePayload = true;
+                foreach ($request->file('images') as $i => $file) {
+                    $hash = md5_file($file->getRealPath());
 
-            RecalculateVariationPriceJob::dispatch($updated->id);
+                    $image = ProductImage::firstOrCreate(
+                        ['hash' => $hash],
+                        [
+                            'path'       => ImageHelper::upload($file, 'variations'),
+                            'sort_order' => $i,
+                        ]
+                    );
 
-            return $this->updatedResponse($updated);
+                    $finalImageIds[] = $image->id;
+                }
+            }
 
-        } catch (\Exception $e) {
+            if (! $hasImagePayload) {
+                $sampleVariation = Variation::where('group_key', $groupKey)->first();
+                if ($sampleVariation) {
+                    $finalImageIds = $sampleVariation->images()->pluck('product_images.id')->toArray();
+                }
+            }
+
+            $finalImageIds = array_unique(array_filter($finalImageIds));
+
+            foreach ($allProcessedVariations as $v) {
+                $v->images()->sync($finalImageIds);
+                $v->characteristics()->sync($characteristicIds);
+            }
+
+            DB::commit();
+
+            foreach ($broadcastItems as $item) {
+                broadcast(new \App\Events\VariationStockUpdated(
+                    $item['id'],
+                    $item['quantity']
+                ));
+            }
+
+            return $this->successResponse($allProcessedVariations, 'Variations updated successfully');
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
             return $this->errorResponse($e->getMessage(), 500);
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION
-    |--------------------------------------------------------------------------
-    */
-    private function validateVariation(Request $request, $ignoreId = null)
+
+    
+
+    private function validateVariation(Request $request)
     {
-        $rule = Rule::unique('variations', 'sku');
-
-        if ($ignoreId) {
-            $rule->ignore($ignoreId);
-        }
-
         return $request->validate([
-            'product_id'                       => ['required', 'exists:products,id'],
-            'sku'                              => ['required', 'string', 'max:100', $rule],
-            'base_price'                       => ['required', 'numeric', 'min:0'],
-            'base_buy_price'                   => ['required', 'numeric', 'min:0'],
-            'quantity'                         => ['nullable', 'integer', 'min:0'],
-            'sold_count'                       => ['nullable', 'integer', 'min:0'],
-            'is_default'                       => ['nullable', 'boolean'],
-            'is_active'                        => ['nullable', 'boolean'],
-            'image'                            => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-
-            'attributes'                       => ['nullable', 'array'],
-
-            'attributes.*.attribute_id'        => ['required_with:attributes', 'integer', 'exists:attributes,id'],
-            'attributes.*.attribute_option_id' => ['required_with:attributes', 'integer', 'exists:attribute_options,id'],
-         
-            // 'attributes.*.price_override'      => ['nullable', 'min:0'],
-
-            'characteristics'                  => ['nullable', 'array'],
+            'product_id'                  => ['required', 'exists:products,id'],
+            'group_key'                   => ['nullable', 'string'],
+            'variations'                  => ['required', 'array'],
+            'variations.*.id'             => ['nullable', 'integer', 'exists:variations,id'],
+            'variations.*.sku'            => ['nullable', 'string'],
+            'variations.*.base_price'     => ['required', 'numeric'],
+            'variations.*.base_buy_price' => ['required', 'numeric'],
+            'variations.*.quantity'       => ['required', 'integer'],
+            'variations.*.attributes'     => ['required', 'array'],
+            'characteristics'             => ['nullable', 'array'],
+            'characteristics.*.name'      => ['nullable', 'string'],
+            'images'                      => ['nullable', 'array'],
+            'images.*'                    => ['image'],
         ]);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | NORMALIZER
-    |--------------------------------------------------------------------------
-    */
-    private function normalizePriceOverride($value)
+    public function destroy($groupKey)
     {
-        if ($value === '' || $value === null) {
-            return null;
+        if (! $groupKey) {
+            return $this->errorResponse("Missing group_key", 422);
         }
 
-        return (float) $value;
+        // 1. Fetch variations with their images
+        $variations = Variation::with('images')->where('group_key', $groupKey)->get();
+
+        if ($variations->isEmpty()) {
+            return response()->json(['message' => 'No variations found for this group key'], 404);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $imageIds = $variations->flatMap(fn($v) => $v->images->pluck('id'))->unique()->toArray();
+
+            $imagesToDelete = [];
+            if (! empty($imageIds)) {
+                $images = ProductImage::whereIn('id', $imageIds)->get();
+
+                foreach ($images as $image) {
+                    $usedByOtherGroups = DB::table('product_image_variations')
+                        ->join('variations', 'product_image_variations.variation_id', '=', 'variations.id')
+                        ->where('product_image_variations.product_image_id', $image->id)
+                        ->where('variations.group_key', '!=', $groupKey)
+                        ->exists();
+
+                    if (! $usedByOtherGroups) {
+                        $imagesToDelete[] = $image;
+                    }
+                }
+            }
+
+            foreach ($variations as $v) {
+                $v->images()->detach();
+                $v->characteristics()->detach();
+            }
+
+            foreach ($imagesToDelete as $image) {
+                if ($image->path) {
+                    ImageHelper::delete($image->path);
+                }
+                $image->delete();
+            }
+
+            Variation::where('group_key', $groupKey)->delete();
+
+            DB::commit();
+            return $this->deletedResponse();
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return $this->errorResponse($e->getMessage() . " on line " . $e->getLine(), 500);
+        }
     }
+
 }

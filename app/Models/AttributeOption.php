@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AttributeOption extends Model
 {
@@ -21,7 +20,7 @@ class AttributeOption extends Model
 
     protected $casts = [
         'price_modifier' => 'decimal:2',
-        'sort_order' => 'integer',
+        'sort_order'     => 'integer',
     ];
 
     /*
@@ -29,23 +28,16 @@ class AttributeOption extends Model
     | RELATIONS
     |--------------------------------------------------------------------------
     */
-
     public function attribute(): BelongsTo
     {
         return $this->belongsTo(Attribute::class);
     }
 
-    public function variationAttributes(): HasMany
-    {
-        return $this->hasMany(VariationAttribute::class);
-    }
-
     /*
     |--------------------------------------------------------------------------
     | ACCESSORS
-|--------------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
-
     public function getIsColorAttribute(): bool
     {
         return !is_null($this->color_code);

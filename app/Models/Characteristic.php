@@ -3,26 +3,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Characteristic extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = [
-        'variation_id',
-        'attribute',
+        'name',
     ];
 
     protected $casts = [
-        'variation_id' => 'integer',
-        'created_at'   => 'datetime',
-        'updated_at'   => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
-    public function variation(): BelongsTo
+    public function variations(): BelongsToMany
     {
-        return $this->belongsTo(Variation::class);
+        return $this->belongsToMany(Variation::class, 'variation_characteristics')
+            ->withTimestamps();
     }
 
 }

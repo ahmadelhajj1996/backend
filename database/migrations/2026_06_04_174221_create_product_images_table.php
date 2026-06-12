@@ -11,22 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('variation_images', function (Blueprint $table) {
-
+        Schema::create('product_images', function (Blueprint $table) {
             $table->id();
-
-            $table->foreignId('variation_id')
-                ->constrained()
-                ->cascadeOnDelete();
-
-            $table->text('path');
-
-            // Sorting
-            $table->unsignedInteger('sort_order')->default(0);
-
+            $table->string('path', 500);
+            $table->string('hash', 64)->nullable();
+            $table->integer('sort_order')->default(0);
             $table->timestamps();
+            $table->index('hash');
 
-            $table->index('variation_id');
         });
     }
 
@@ -35,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('variation_images');
+        Schema::dropIfExists('product_images');
     }
 };

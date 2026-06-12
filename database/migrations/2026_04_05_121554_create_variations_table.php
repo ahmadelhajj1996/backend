@@ -12,106 +12,41 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('variations', function (Blueprint $table) {
-
             $table->id();
+            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->string('sku')->unique();
+            $table->json('attributes')->nullable();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Relationships
-            |--------------------------------------------------------------------------
-            */
+            $table->decimal('sell_price', 15, 0)->default(0);
+            $table->decimal('base_price', 15, 2)->nullable();
+            $table->decimal('sell_rate', 15, 1)->nullable();
 
-            $table->foreignId('product_id')
-                ->constrained()
-                ->cascadeOnDelete();
+            $table->decimal('buy_price', 15, 0)->default(0);
+            $table->decimal('base_buy_price', 15, 2)->nullable();
+            $table->decimal('buy_rate', 15, 1)->nullable();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Identification
-            |--------------------------------------------------------------------------
-            */
+            $table->unsignedInteger('quantity')->default(0);
+            $table->unsignedInteger('sold_count')->default(0);
 
-            $table->string('sku')
-                ->unique();
+            $table->decimal('cached_final_price', 10, 0)->nullable();
+            $table->decimal('cached_profit', 10, 1)->nullable();
+            $table->decimal('cached_profit_percentage', 10, 1)->nullable();
+    
+            $table->string('group_key')->nullable()->index();
 
-             $table->decimal('sell_price', 15, 0)
-                ->default(0);
-
-            // USD sell price
-            $table->decimal('base_price', 15, 2)
-                ->nullable();
-
-            // Exchange rate used for sell price
-            $table->decimal('sell_rate', 15, 1)
-                ->nullable();
-
-            /*
-            |--------------------------------------------------------------------------
-            | Supplier / Cost Prices
-            |--------------------------------------------------------------------------
-            */
-
-            // Local supplier cost (SYP)
-            $table->decimal('buy_price', 15, 0)
-                ->default(0);
-
-            // USD supplier cost
-            $table->decimal('base_buy_price', 15, 2)
-                ->nullable();
-
-            // Exchange rate used for supplier cost
-            $table->decimal('buy_rate', 15, 1)
-                ->nullable();
-
-            /*
-            |--------------------------------------------------------------------------
-            | Inventory
-            |--------------------------------------------------------------------------
-            */
-
-            $table->unsignedInteger('quantity')
-                ->default(0);
-
-            $table->unsignedInteger('sold_count')
-                ->default(0);
-
-            $table->decimal('cached_final_price', 10, 0)
-                ->nullable();
-
-            $table->decimal('cached_profit', 10, 1)
-                ->nullable();
-
-            $table->decimal('cached_profit_percentage', 10, 1)
-                ->nullable();
-
-
-
-            $table->boolean('is_default')
-                ->default(false);
-
-            $table->boolean('is_active')
-                ->default(true);
-
-            $table->string('image')
-                ->nullable();
-
+            $table->boolean('is_default')->default(false);
+            $table->boolean('is_active')->default(true);
+            $table->string('image')->nullable();
             $table->timestamps();
 
-            /*
-            |--------------------------------------------------------------------------
-            | Indexes
-            |--------------------------------------------------------------------------
-            */
-
-            $table->index('product_id');
-            $table->index('sku');
+            // ⚡ HIGH-PERFORMANCE COMPOSITE INDEXES
+            $table->index(['product_id', 'is_active', 'created_at']);
             $table->index('is_default');
-            $table->index('is_active');
         });
     }
 
     /**
-     * Reverse migrations
+     * Reverse the migrations.
      */
     public function down(): void
     {

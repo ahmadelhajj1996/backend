@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             CategorySeeder::class,
             MessageSeeder::class,
+            AttributeSeeder::class,
+
         ]);
     }
 }

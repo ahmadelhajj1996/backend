@@ -21,7 +21,6 @@ class ProductController extends Controller
 
             $query = Product::with([
                 'variations.images',
-                'variations.attributes.option.attribute',
                 'category',
                 'variations.characteristics',
             ]);
@@ -136,8 +135,7 @@ class ProductController extends Controller
                 ])
                 ->published();
 
-
-                if ($request->filled('category_id')) {
+            if ($request->filled('category_id')) {
                 $categoryId = (int) $request->category_id;
                 $query->where('category_id', $categoryId);
 
@@ -222,16 +220,23 @@ class ProductController extends Controller
     {
         try {
 
-            $products = Product::with([
-                'category:id,name',
-                'variations.images',
-                '',
-
-            ])
+            $products = Product::select(
+                'id',
+                'category_id',
+                'name',
+            )
+                ->with([
+                    'firstVariation' => function ($query) {
+                        $query->select('id', 'product_id', 'sell_price')
+                            ->with('images');
+                    },
+                ])
                 ->where('is_featured', true)
                 ->where('is_active', true)
                 ->latest()
-                ->paginate(15);
+                ->take(15)
+                ->get();
+
 
             return $this->successResponse(
                 $products,

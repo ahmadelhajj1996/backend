@@ -5,18 +5,15 @@ use App\Http\Controllers\AttributeOptionController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CharacteristicController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SearchController;
-use App\Http\Controllers\VariationAttributeController;
 use App\Http\Controllers\VariationController;
 use App\Http\Controllers\VariationImageController;
-use App\Http\Controllers\ExchangeRateController;
 use Illuminate\Support\Facades\Route;
-
-
 
 Route::prefix('admin')->group(function () {
     Route::post('login', [AdminController::class, 'login']);
@@ -32,7 +29,7 @@ Route::prefix('admin')->group(function () {
 });
 
 Route::get('exchange-rates', [ExchangeRateController::class, 'index']);
-Route::post('exchange-rates/update-prices',[ExchangeRateController::class, 'updatePrices']);
+Route::post('exchange-rates/update-prices', [ExchangeRateController::class, 'updatePrices']);
 
 Route::post('exchange-rates/fetch', [ExchangeRateController::class, 'fetch']);
 
@@ -74,8 +71,10 @@ Route::apiResource('attributes', AttributeController::class);
 
 Route::apiResource('attributes-options', AttributeOptionController::class);
 
-Route::apiResource('variations', VariationController::class);
-Route::apiResource('variations-attributes', VariationAttributeController::class);
+Route::get('/variations', [VariationController::class, 'index']);
+Route::post('/variations', [VariationController::class, 'store']);
+Route::put('/variations/{groupKey}', [VariationController::class, 'update']);
+Route::delete('/variations/{groupKey}', [VariationController::class, 'destroy']);
 
 Route::apiResource('variation-images', VariationImageController::class);
 
@@ -90,8 +89,15 @@ Route::post(
 
 Route::get("/search", [SearchController::class, "index"]);
 
-
 Route::get(
     '/{id}/products',
     [ProductController::class, 'categoryProducts']
 );
+
+// Route::get('/test-broadcast', function () {
+//     broadcast(new \App\Events\VariationStockUpdated(1, 99));
+
+// });
+
+
+ 

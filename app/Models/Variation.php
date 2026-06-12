@@ -1,36 +1,30 @@
 <?php
-
 namespace App\Models;
 
 use App\Helpers\ImageHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 
 class Variation extends Model
 {
     use HasFactory;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Mass Assignment
-    |--------------------------------------------------------------------------
-    */
-
     protected $fillable = [
         'product_id',
         'sku',
-
+        'attributes',
         'sell_price',
         'base_price',
         'sell_rate',
-
         'buy_price',
         'base_buy_price',
         'buy_rate',
         'quantity',
         'sold_count',
+        "group_key",
         'is_default',
         'is_active',
         'image',
@@ -39,119 +33,89 @@ class Variation extends Model
         'cached_profit_percentage',
     ];
 
-     protected $casts = [
-        'sell_price'     => 'decimal:0',
-        'base_price'     => 'decimal:2',
-        'sell_rate'      => 'decimal:1',
-        'buy_price'      => 'decimal:0',
-        'base_buy_price' => 'decimal:2',
-        'buy_rate'       => 'decimal:0',
-
-        'quantity'       => 'integer',
-        'sold_count'     => 'integer',
-
-        'is_default'     => 'boolean',
-        'is_active'      => 'boolean',
-
-        'cached_final_price'      => 'decimal:0',
-        'cached_profit'           => 'decimal:1',
-        'cached_profit_percentage'=> 'decimal:1',
+    protected $casts = [
+        'attributes' => 'array',
+        'is_default' => 'boolean',
+        'is_active'  => 'boolean',
     ];
 
- 
     protected $appends = [
         'image_url',
-        'is_in_stock',
-
-        // Pricing (FAST)
-        'final_price',
-        'usd_price',
-
-        // Analytics (FAST)
-        'profit',
-        'profit_percentage',
+        'images_list',
     ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
 
-    public function attributes(): HasMany
+    public function images(): BelongsToMany
     {
-        return $this->hasMany(VariationAttribute::class)
-            ->with(['attribute', 'option']);
+        return $this->belongsToMany(
+            ProductImage::class,
+            'product_image_variations'
+        )->withTimestamps();
     }
 
-    public function images(): HasMany
+    public function characteristics(): BelongsToMany
     {
-        return $this->hasMany(VariationImage::class)
-            ->orderBy('sort_order');
+        return $this->belongsToMany(
+            Characteristic::class,
+            'variation_characteristics'
+        )->withTimestamps();
     }
-
-    public function orderItems(): HasMany
-    {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    public function characteristics(): HasMany
-    {
-        return $this->hasMany(Characteristic::class);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Accessors (NOW PURE CACHE READS ONLY)
-    |--------------------------------------------------------------------------
-    */
 
     public function getImageUrlAttribute(): ?string
     {
-        return ImageHelper::url($this->image);
+        return $this->image ? ImageHelper::url($this->image) : null;
     }
 
-    public function getIsInStockAttribute(): bool
+    /**
+     * Highly Optimized Resolution Layer
+     * Call explicitly when mapping items out, or integrate within an API Resource layer
+     * to completely avoid runtime bottleneck exceptions during mass pagination.
+     */
+    public function resolveReadableAttributes(): array
     {
-        return $this->quantity > 0;
+        $attributes = $this->attributes ?? [];
+
+        if (empty($attributes)) {
+            return [];
+        }
+
+        $optionIds = array_values($attributes);
+
+        $records = DB::table('attribute_options')
+            ->join('attributes', 'attributes.id', '=', 'attribute_options.attribute_id')
+            ->whereIn('attribute_options.id', $optionIds)
+            ->select(
+                'attributes.id as attribute_id',
+                'attributes.name as attribute_name',
+                'attribute_options.id as option_id',
+                'attribute_options.value as option_value'
+            )
+            ->get();
+
+        $result = [];
+        foreach ($records as $record) {
+            $result[] = [
+                'attribute_id'   => $record->attribute_id,
+                'attribute_name' => $record->attribute_name,
+                'option_id'      => $record->option_id,
+                'value'          => $record->option_value,
+            ];
+        }
+
+        return $result;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pricing (CACHE-ONLY HOT PATH)
-    |--------------------------------------------------------------------------
-    */
-
-    public function getFinalPriceAttribute(): float
+    public function getImagesListAttribute()
     {
-        return (float) ($this->cached_final_price ?? 0);
+        if (!$this->relationLoaded('images') || !$this->images) {
+            return [];
+        }
+
+        return $this->images->pluck('path_url')->toArray();
     }
 
-    public function getUsdPriceAttribute(): ?float
-    {
-        return $this->base_price
-            ? (float) round($this->base_price, 2)
-            : null;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Profit (CACHE-ONLY HOT PATH)
-    |--------------------------------------------------------------------------
-    */
-
-    public function getProfitAttribute(): float
-    {
-        return (float) ($this->cached_profit ?? 0);
-    }
-
-    public function getProfitPercentageAttribute(): float
-    {
-        return (float) ($this->cached_profit_percentage ?? 0);
-    }
 }

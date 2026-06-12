@@ -10,6 +10,11 @@ Broadcast::channel('App.Models.Admin.{id}', function ($admin, $id) {
 });
 
 
+Broadcast::channel('variation-stock', function () {
+    return true;
+});
+
+
 
 // Broadcast::channel('App.Models.Client.{id}', function ($client, $id) {
 //     return (int) $client->id === (int) $id;

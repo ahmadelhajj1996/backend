@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Characteristic;
@@ -31,7 +30,7 @@ class CharacteristicController extends Controller
         try {
             $validated = $request->validate([
                 'variation_id' => 'required|exists:variations,id',
-                'attribute'    => 'required|string|max:255',
+                'name'         => 'required|string|max:255',
             ]);
 
             $characteristic = Characteristic::create($validated);
@@ -79,7 +78,7 @@ class CharacteristicController extends Controller
 
             $validated = $request->validate([
                 'variation_id' => 'sometimes|required|exists:variations,id',
-                'attribute'    => 'sometimes|required|string|max:255',
+                'name'         => 'sometimes|required|string|max:255',
             ]);
 
             $characteristic->update($validated);

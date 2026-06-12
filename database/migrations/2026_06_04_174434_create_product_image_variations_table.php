@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('characteristics', function (Blueprint $table) {
+        Schema::create('product_image_variations', function (Blueprint $table) {
             $table->id();
-            $table->text('name');
+            $table->foreignId('variation_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_image_id')->constrained()->onDelete('cascade');
             $table->timestamps();
-
-
         });
     }
 
@@ -25,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('characteristics');
+        Schema::dropIfExists('product_image_variations');
     }
 };

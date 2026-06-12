@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,13 +15,13 @@ class Attribute extends Model
         'slug',
         'type',
         'is_filterable',
-        'is_required',     // Add this
-        'sort_order',      // Add this (if you have this column)
+        'is_required',     
+        'sort_order',      
     ];
 
     protected $casts = [
         'is_filterable' => 'boolean',
-        'is_required' => 'boolean',    // Add this
+        'is_required'   => 'boolean',    
         'created_at'    => 'datetime',
         'updated_at'    => 'datetime',
     ];

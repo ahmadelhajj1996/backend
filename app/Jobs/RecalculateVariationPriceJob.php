@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Variation;
-use App\Services\VariationPriceCalculator;
+// use App\Services\VariationPriceCalculator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,20 +19,20 @@ class RecalculateVariationPriceJob implements ShouldQueue , ShouldBeUnique
         public int $variationId
     ) {}
 
-    public function handle(VariationPriceCalculator $calculator): void
-    {
-        $variation = Variation::with(['attributes.option'])->find($this->variationId);
+    // public function handle(VariationPriceCalculator $calculator): void
+    // {
+    //     $variation = Variation::with(['attributes.option'])->find($this->variationId);
 
-        if (! $variation) {
-            return;
-        }
+    //     if (! $variation) {
+    //         return;
+    //     }
 
-        $final = $calculator->calculateSellPrice($variation);
+    //     $final = $calculator->calculateSellPrice($variation);
 
-        $variation->update([
-            'cached_final_price' => $final,
-            'cached_profit' => $calculator->calculateProfit($variation, $final),
-            'cached_profit_percentage' => $calculator->calculateProfitPercentage($variation, $final),
-        ]);
-    }
+    //     $variation->update([
+    //         'cached_final_price' => $final,
+    //         'cached_profit' => $calculator->calculateProfit($variation, $final),
+    //         'cached_profit_percentage' => $calculator->calculateProfitPercentage($variation, $final),
+    //     ]);
+    // }
 }

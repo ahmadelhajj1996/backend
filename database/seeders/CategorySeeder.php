@@ -15,7 +15,7 @@ class CategorySeeder extends Seeder
     {
         $categories = [
             [
-                'name' => 'ملابس نسائية',
+                'name' => 'نساء',
                 'is_active' => true,
             ],
             [

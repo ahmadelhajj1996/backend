@@ -2,9 +2,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use App\Models\VariationAttribute;
-use App\Observers\VariationAttributeObserver;
-
+ 
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -20,7 +18,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        VariationAttribute::observe(VariationAttributeObserver::class);
 
     }
 }
