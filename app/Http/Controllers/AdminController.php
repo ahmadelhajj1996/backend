@@ -10,7 +10,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AdminController extends Controller
 {
-   
+
 
     public function login(Request $request)
     {
@@ -34,10 +34,6 @@ class AdminController extends Controller
         return response()->json(['message' => 'Successfully logged out']);
     }
 
-    public function refresh()
-    {
-        return $this->respondWithToken(Auth::guard('admin')->refresh());
-    }
 
     public function me()
     {
@@ -54,5 +50,4 @@ class AdminController extends Controller
             'guard' => 'admin'
         ]);
     }
-
 }
